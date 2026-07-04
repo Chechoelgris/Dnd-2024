@@ -145,7 +145,7 @@ input, select, textarea {
   border-radius: 5px;
 }
 input:focus, select:focus, textarea:focus { outline: none; border-color: var(--accent); box-shadow: var(--focus-ring); }
-button:focus-visible, a:focus-visible, .tab-btn:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+button:focus-visible, a:focus-visible, .screen-btn:focus-visible { outline: none; box-shadow: var(--focus-ring); }
 textarea { width: 100%; resize: vertical; }
 .field input, .field select, .field textarea { width: 100%; }
 input.tiny { width: 3.2em; }
@@ -184,6 +184,7 @@ input.tiny { width: 3.2em; }
 .dot.prof { background: var(--accent); border-color: var(--accent); }
 .dot.expertise { background: var(--gold); border-color: var(--gold); box-shadow: 0 0 0 2px var(--accent) inset; }
 .dot:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.dot.readonly { cursor: default; }
 
 .save-row, .skill-row {
   display: grid;
@@ -233,6 +234,15 @@ input.tiny { width: 3.2em; }
 .hex-stat .hex-value { font-size: 1.7rem; font-weight: bold; color: var(--accent); }
 .hex-stat input { width: 100%; text-align: center; font-size: 1.7rem; font-weight: bold; color: var(--accent); background: transparent; border: none; }
 .armor-hex { border-color: var(--accent); }
+.ac-card { min-width: 220px; }
+.ac-breakdown { font-size: .68rem; color: var(--ink-dim); margin: .2em 0; min-height: 2.4em; }
+.ac-manual-label { display: flex; align-items: center; justify-content: center; gap: .4em; font-size: .62rem; }
+.ac-manual-label input { width: 3em; font-size: .85rem; }
+
+.hitdice-used { justify-content: center; font-size: 1.1rem; font-weight: bold; color: var(--accent); }
+.hitdice-used button { width: 1.8em; height: 1.8em; }
+.concentration-box { display: flex; flex-direction: column; align-items: center; }
+.species-senses { font-size: .78rem; color: var(--ink-dim); margin: 0 0 .5em; }
 
 .hp-card {
   flex: 1.4; min-width: 220px;
@@ -265,29 +275,50 @@ input.tiny { width: 3.2em; }
 .info-card { display: flex; flex-wrap: wrap; gap: 1em; align-items: center; font-size: .8rem; }
 .ref-col { flex: 1 1 220px; color: var(--ink-dim); }
 .ref-col strong { color: var(--ink); }
-.apply-btn {
-  background: var(--accent-solid);
-  color: #fff;
-  border: none;
-  padding: .55em .9em;
-  border-radius: 6px;
-  cursor: pointer;
-  font-size: .85rem;
-  font-weight: bold;
-}
 
-/* ---------- TABS ---------- */
-.tabs { display: flex; flex-wrap: wrap; gap: .2em; border-bottom: 2px solid var(--line); margin-bottom: .8em; }
-.tab-btn {
+/* ---------- SCREEN SWITCHER (Combate / Explorar / Magia / Interacción) ---------- */
+.screen-switcher { display: flex; flex-wrap: wrap; gap: .4em; border-bottom: 2px solid var(--line); margin-bottom: .9em; }
+.screen-btn {
   background: none; border: none; color: var(--ink-dim);
-  padding: .6em 1em; cursor: pointer; font-size: .85rem; font-weight: bold;
+  padding: .65em 1.1em; cursor: pointer; font-size: .95rem; font-weight: bold;
   letter-spacing: .02em; border-bottom: 3px solid transparent; margin-bottom: -2px;
 }
-.tab-btn:hover { color: var(--ink); }
-.tab-btn.active { color: var(--accent); border-bottom-color: var(--accent); }
-.tab-panel { display: none; }
-.tab-panel.active { display: block; }
+.screen-btn:hover { color: var(--ink); }
+.screen-btn.active { color: var(--accent); border-bottom-color: var(--accent); }
+.screen { display: none; }
+.screen.active { display: block; }
 .print-only { display: none; }
+
+/* ---------- QUICK GLANCE (rail persistente) ---------- */
+.quick-glance { display: grid; grid-template-columns: 1fr 1fr; gap: .6em; }
+.qg-item { text-align: center; border: 1px solid var(--line); border-radius: 8px; padding: .5em .3em; }
+.qg-item .qg-value { display: block; font-size: 1.25rem; font-weight: bold; color: var(--accent); }
+.qg-item label { font-size: .62rem; }
+
+/* ---------- ASIGNACIÓN DE TRASFONDO ---------- */
+.radio-row { display: block; font-size: .82rem; margin-bottom: .3em; }
+.alloc-selects { margin-top: .5em; display: flex; flex-direction: column; gap: .4em; }
+.alloc-selects label { font-size: .78rem; display: flex; align-items: center; gap: .4em; }
+.alloc-selects select { flex: 1; }
+.ability-total { font-size: .65rem; color: var(--gold); min-height: 1em; display: block; }
+
+/* ---------- ELECCIÓN DE HABILIDADES DE CLASE ---------- */
+.choice-row { display: block; font-size: .85rem; padding: .2em 0; }
+.choice-row input:disabled + * { opacity: .5; }
+
+/* ---------- INVENTARIO Y EQUIPAMIENTOS ---------- */
+.loadout-bar { display: flex; flex-wrap: wrap; gap: .5em; margin-bottom: .7em; }
+.loadout-chip {
+  background: var(--panel-2); border: 1px solid var(--line); color: var(--ink);
+  padding: .4em .8em; border-radius: 999px; cursor: pointer; font-size: .82rem; font-weight: bold;
+}
+.loadout-chip.active { background: var(--accent-solid); border-color: var(--accent-solid); color: #fff; }
+.inventory-table { width: 100%; border-collapse: collapse; font-size: .85rem; margin-bottom: .6em; }
+.inventory-table th { text-align: left; color: var(--gold); font-size: .68rem; text-transform: uppercase; padding-bottom: .3em; }
+.inventory-table td { border-bottom: 1px dotted var(--line); padding: .4em .3em; }
+.add-item-row { display: flex; gap: .5em; }
+.add-item-row select { flex: 1; }
+.equipped-summary { font-size: .82rem; color: var(--ink-dim); margin: .4em 0 0; }
 
 /* ---------- TABLES ---------- */
 .attacks-table { width: 100%; border-collapse: collapse; font-size: .85rem; }
@@ -337,8 +368,8 @@ input.tiny { width: 3.2em; }
   .print-header { display: block; }
   .print-header h1 { color: #000; }
   .print-only { display: block; }
-  .tab-panel { display: block !important; break-inside: avoid; }
-  .tab-panel.print-section { break-before: page; }
+  .screen { display: block !important; break-inside: avoid; }
+  .screen.print-section { break-before: page; }
   h1, h2, h3 { color: #000 !important; }
   .stat-value, .hex-value, .mod, .bonus, .stat-box .stat-value, .passive-stat .passive-value { color: #000 !important; }
   input, select, textarea { background: #fff !important; color: #000 !important; border-color: #999 !important; }

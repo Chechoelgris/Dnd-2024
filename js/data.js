@@ -134,3 +134,101 @@ const ALIGNMENTS = [
   "Legal Neutral", "Neutral", "Caótico Neutral",
   "Legal Malvado", "Neutral Malvado", "Caótico Malvado",
 ];
+
+// Habilidades que cada clase permite elegir a nivel 1 (2024 PHB), y cuántas.
+const CLASS_SKILL_CHOICES = {
+  barbarian: { count: 2, options: ["animalHandling", "athletics", "intimidation", "nature", "perception", "survival"] },
+  bard: { count: 3, options: SKILLS.map(s => s.key) },
+  cleric: { count: 2, options: ["history", "insight", "medicine", "persuasion", "religion"] },
+  druid: { count: 2, options: ["arcana", "animalHandling", "insight", "medicine", "nature", "perception", "religion", "survival"] },
+  fighter: { count: 2, options: ["acrobatics", "animalHandling", "athletics", "history", "insight", "intimidation", "perception", "survival"] },
+  monk: { count: 2, options: ["acrobatics", "athletics", "history", "insight", "religion", "stealth"] },
+  paladin: { count: 2, options: ["athletics", "insight", "intimidation", "medicine", "persuasion", "religion"] },
+  ranger: { count: 3, options: ["animalHandling", "athletics", "insight", "investigation", "nature", "perception", "stealth", "survival"] },
+  rogue: { count: 4, options: ["acrobatics", "athletics", "deception", "insight", "intimidation", "investigation", "perception", "performance", "persuasion", "sleightOfHand", "stealth"] },
+  sorcerer: { count: 2, options: ["arcana", "deception", "insight", "intimidation", "persuasion", "religion"] },
+  warlock: { count: 2, options: ["arcana", "deception", "history", "intimidation", "investigation", "nature", "religion"] },
+  wizard: { count: 2, options: ["arcana", "history", "insight", "investigation", "medicine", "religion"] },
+};
+
+// Catálogo básico de objetos (SRD 5.2) para el sistema de equipo/inventario.
+// maxDex null = sin límite (armadura ligera); number = límite (media); 0 = ninguno (pesada).
+const ITEM_CATALOG = [
+  { name: "Armadura de cuero", category: "armor", armor: { type: "light", baseAC: 11, maxDex: null } },
+  { name: "Cuero tachonado", category: "armor", armor: { type: "light", baseAC: 12, maxDex: null } },
+  { name: "Cota de escamas", category: "armor", armor: { type: "medium", baseAC: 13, maxDex: 2 } },
+  { name: "Semiplaca", category: "armor", armor: { type: "medium", baseAC: 15, maxDex: 2 } },
+  { name: "Cota de malla", category: "armor", armor: { type: "heavy", baseAC: 16, maxDex: 0, strMin: 13 } },
+  { name: "Armadura de placas", category: "armor", armor: { type: "heavy", baseAC: 18, maxDex: 0, strMin: 15 } },
+  { name: "Escudo", category: "shield", shieldBonus: 2 },
+  { name: "Daga", category: "weapon", weapon: { damage: "1d4", damageType: "perforante", properties: "Sutil, ligera, arrojadiza", abilityKey: "dex", finesse: true } },
+  { name: "Espada corta", category: "weapon", weapon: { damage: "1d6", damageType: "perforante", properties: "Sutil, ligera", abilityKey: "dex", finesse: true } },
+  { name: "Estoque", category: "weapon", weapon: { damage: "1d8", damageType: "perforante", properties: "Sutil", abilityKey: "dex", finesse: true } },
+  { name: "Espada larga", category: "weapon", weapon: { damage: "1d8", damageType: "cortante", properties: "Versátil (1d10)", abilityKey: "str", finesse: false } },
+  { name: "Maza", category: "weapon", weapon: { damage: "1d6", damageType: "contundente", properties: "", abilityKey: "str", finesse: false } },
+  { name: "Martillo de guerra", category: "weapon", weapon: { damage: "1d8", damageType: "contundente", properties: "Versátil (1d10)", abilityKey: "str", finesse: false } },
+  { name: "Arco corto", category: "weapon", weapon: { damage: "1d6", damageType: "perforante", properties: "Munición, a distancia", abilityKey: "dex", finesse: false } },
+  { name: "Arco largo", category: "weapon", weapon: { damage: "1d8", damageType: "perforante", properties: "Munición, a distancia, pesada", abilityKey: "dex", finesse: false } },
+  { name: "Ballesta ligera", category: "weapon", weapon: { damage: "1d8", damageType: "perforante", properties: "Munición, a distancia, carga", abilityKey: "dex", finesse: false } },
+  { name: "Ropa fina / disfraz", category: "gear", acBonus: 0 },
+  { name: "Anillo de protección", category: "gear", acBonus: 1 },
+];
+
+// Personajes de ejemplo listos para cargar, cada uno con dos equipamientos (loadouts)
+// que demuestran cómo cambiar de "conjunto" recalcula la CA y el equipo activo al instante.
+const SAMPLE_CHARACTERS = {
+  rogue: {
+    identity: { name: "Vex Sombralarga", playerName: "", classKey: "rogue", level: 5, speciesKey: "halfling", backgroundKey: "criminal", alignment: "Caótico Neutral", xp: 6500 },
+    abilitiesBase: { str: 8, dex: 17, con: 13, wis: 12, int: 10, cha: 14 },
+    backgroundAllocation: { mode: "twoOne", plus2Key: "dex", plus1Key: "con" },
+    classSkillChoices: ["acrobatics", "perception", "investigation", "deception"],
+    skillExpertise: ["stealth", "sleightOfHand"],
+    hp: { max: 33, current: 33, temp: 0 },
+    inventory: [
+      { name: "Armadura de cuero", category: "armor", armor: { type: "light", baseAC: 11, maxDex: null }, equipped: true },
+      { name: "Estoque", category: "weapon", weapon: { damage: "1d8", damageType: "perforante", properties: "Sutil", abilityKey: "dex", finesse: true }, equipped: true },
+      { name: "Arco corto", category: "weapon", weapon: { damage: "1d6", damageType: "perforante", properties: "Munición, a distancia", abilityKey: "dex", finesse: false }, equipped: false },
+      { name: "Ropa fina / disfraz", category: "gear", acBonus: 0, equipped: false },
+      { name: "Herramientas de ladrón", category: "gear", acBonus: 0, equipped: false },
+    ],
+    loadoutDefs: [
+      { name: "Sigilo y asalto", itemNames: ["Armadura de cuero", "Estoque", "Arco corto"] },
+      { name: "Infiltración social", itemNames: ["Ropa fina / disfraz"] },
+    ],
+    activeLoadoutName: "Sigilo y asalto",
+    attacks: [
+      { name: "Estoque (Ataque Furtivo)", range: "1.5 m", bonus: "+7", damage: "1d8+3 perforante +3d6 furtivo", notes: "Sutil; ventaja o aliado adyacente" },
+      { name: "Arco corto", range: "18/54 m", bonus: "+7", damage: "1d6+3 perforante +3d6 furtivo", notes: "Munición" },
+    ],
+    featuresTraits: "Ataque Furtivo (3d6). Acción Astuta (Dash/Disengage/Esconderse como acción adicional). Esquiva Asombrosa. Jerga de Ladrones.",
+    originFeat: "Alerta",
+    otherProficiencies: "Herramientas de ladrón, Kit de disfraz\nIdiomas: Común, Jerga de Ladrones",
+  },
+  paladin: {
+    identity: { name: "Bruma Kaelthorn", playerName: "", classKey: "paladin", level: 5, speciesKey: "dragonborn", backgroundKey: "noble", alignment: "Legal Bueno", xp: 6500 },
+    abilitiesBase: { str: 16, dex: 10, con: 14, wis: 10, int: 8, cha: 16 },
+    backgroundAllocation: { mode: "twoOne", plus2Key: "str", plus1Key: "cha" },
+    classSkillChoices: ["athletics", "medicine"],
+    hp: { max: 44, current: 44, temp: 0 },
+    spellSlots: { 1: { total: 4, used: 0 }, 2: { total: 2, used: 0 } },
+    inventory: [
+      { name: "Cota de malla", category: "armor", armor: { type: "heavy", baseAC: 16, maxDex: 0, strMin: 13 }, equipped: true },
+      { name: "Escudo", category: "shield", shieldBonus: 2, equipped: true },
+      { name: "Espada larga", category: "weapon", weapon: { damage: "1d8", damageType: "cortante", properties: "Versátil (1d10)", abilityKey: "str", finesse: false }, equipped: true },
+      { name: "Cuero tachonado", category: "armor", armor: { type: "light", baseAC: 12, maxDex: null }, equipped: false },
+      { name: "Martillo de guerra", category: "weapon", weapon: { damage: "1d8", damageType: "contundente", properties: "Versátil (1d10)", abilityKey: "str", finesse: false }, equipped: false },
+    ],
+    loadoutDefs: [
+      { name: "Formación de batalla", itemNames: ["Cota de malla", "Escudo", "Espada larga"] },
+      { name: "Marcha y viaje", itemNames: ["Cuero tachonado", "Martillo de guerra"] },
+    ],
+    activeLoadoutName: "Formación de batalla",
+    attacks: [
+      { name: "Espada larga", range: "1.5 m", bonus: "+6", damage: "1d8+3 cortante (1d10+3 a dos manos)", notes: "Versátil" },
+      { name: "Aliento (raza)", range: "4.5 m (cono)", bonus: "CD 13", damage: "2d6 según ascendencia", notes: "Recarga con descanso, usos = bonif. competencia" },
+    ],
+    featuresTraits: "Castigo Divino. Sentido Divino. Imposición de Manos (25 PG de reserva). Salud Radiante (2024).",
+    originFeat: "Habilidoso",
+    otherProficiencies: "Set de juego (Noble)\nIdiomas: Común, Dracónico",
+  },
+};

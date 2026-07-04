@@ -1,35 +1,59 @@
 // Lógica de la hoja de personaje D&D 2024.
+// Motor reactivo: toda cifra derivada (CA, salvaciones, habilidades, conjuros)
+// se recalcula siempre a partir del estado — nunca se edita a mano por separado.
+
+const CATEGORY_LABELS = { armor: "Armadura", shield: "Escudo", weapon: "Arma", gear: "Objeto" };
+const SOCIAL_SKILLS = ["deception", "insight", "intimidation", "performance", "persuasion"];
 
 const state = {
-  abilities: { str: 10, dex: 10, con: 10, wis: 10, int: 10, cha: 10 },
-  saveProf: {},   // { str: true, ... }
-  skillProf: {},  // { acrobatics: true, ... }
+  abilitiesBase: { str: 10, dex: 10, con: 10, wis: 10, int: 10, cha: 10 },
+  backgroundAllocation: null, // { mode: "twoOne"|"allOne", plus2Key, plus1Key }
+  classSkillChoices: [],      // habilidades elegidas de la lista de la clase
+  bgGrantedSkills: [],        // habilidades otorgadas por el trasfondo actual
+  skillProf: {},
   skillExpertise: {},
   attacks: [{ name: "", range: "", bonus: "", damage: "", notes: "" }],
-  spellSlots: {}, // { 1: {total:0, used:0}, ... }
-  spells: {},     // { 0: "text", 1: "text", ... }
+  spellSlots: {},
+  spells: {},
+  inventory: [],   // { id, name, category, equipped, armor?, shieldBonus?, weapon?, acBonus? }
+  loadouts: [],    // { id, name, itemIds: [] }
+  activeLoadoutId: null,
+  hitDiceUsed: 0,
 };
 
 function byId(id) { return document.getElementById(id); }
 function mod(score) { return Math.floor((Number(score) - 10) / 2); }
 function fmtMod(n) { return (n >= 0 ? "+" : "") + n; }
+function uid() { return "id_" + Math.random().toString(36).slice(2, 10); }
+
+function getClass() { return CLASSES.find(c => c.key === byId("charClass").value); }
+function getSpecies() { return SPECIES.find(s => s.key === byId("charSpecies").value); }
+function getBackground() { return BACKGROUNDS.find(b => b.key === byId("charBackground").value); }
+function getLevel() { return Number(byId("charLevel").value) || 1; }
+
+// ---------- Característica base + bonificación de trasfondo ----------
+function backgroundBonusFor(key) {
+  const bg = getBackground();
+  const alloc = state.backgroundAllocation;
+  if (!bg || !alloc) return 0;
+  if (alloc.mode === "allOne") return bg.abilities.includes(key) ? 1 : 0;
+  if (alloc.plus2Key === key) return 2;
+  if (alloc.plus1Key === key) return 1;
+  return 0;
+}
+function totalAbility(key) { return (state.abilitiesBase[key] || 0) + backgroundBonusFor(key); }
+function abilityMod(key) { return mod(totalAbility(key)); }
 
 // ---------- Poblar selects ----------
 function populateSelects() {
-  const classSel = byId("charClass");
-  CLASSES.forEach(c => classSel.add(new Option(c.name, c.key)));
-
-  const bgSel = byId("charBackground");
-  BACKGROUNDS.forEach(b => bgSel.add(new Option(b.name, b.key)));
-
-  const spSel = byId("charSpecies");
-  SPECIES.forEach(s => spSel.add(new Option(s.name, s.key)));
-
-  const alSel = byId("charAlignment");
-  ALIGNMENTS.forEach(a => alSel.add(new Option(a, a)));
+  CLASSES.forEach(c => byId("charClass").add(new Option(c.name, c.key)));
+  BACKGROUNDS.forEach(b => byId("charBackground").add(new Option(b.name, b.key)));
+  SPECIES.forEach(s => byId("charSpecies").add(new Option(s.name, s.key)));
+  ALIGNMENTS.forEach(a => byId("charAlignment").add(new Option(a, a)));
+  ITEM_CATALOG.forEach((it, i) => byId("newItemCatalog").add(new Option(`${it.name} (${CATEGORY_LABELS[it.category]})`, i)));
 }
 
-// ---------- Renderizar características ----------
+// ---------- Características ----------
 function renderAbilities() {
   const box = byId("abilitiesBox");
   box.innerHTML = "";
@@ -39,47 +63,56 @@ function renderAbilities() {
     div.innerHTML = `
       <label>${a.name}</label>
       <div class="mod" id="mod_${a.key}">+0</div>
-      <input type="number" id="score_${a.key}" value="${state.abilities[a.key]}" min="1" max="30">
+      <input type="number" id="score_${a.key}" value="${state.abilitiesBase[a.key]}" min="1" max="30">
+      <span class="ability-total" id="total_${a.key}"></span>
     `;
     box.appendChild(div);
     div.querySelector("input").addEventListener("input", e => {
-      state.abilities[a.key] = Number(e.target.value) || 0;
+      state.abilitiesBase[a.key] = Number(e.target.value) || 0;
       recalcAll();
     });
   });
 }
 
-function cycleProf(skillOrSaveState, expertiseState, key, allowExpertise) {
-  const prof = !!skillOrSaveState[key];
-  const exp = expertiseState ? !!expertiseState[key] : false;
-  if (!prof) {
-    skillOrSaveState[key] = true;
-  } else if (allowExpertise && !exp) {
-    expertiseState[key] = true;
-  } else {
-    skillOrSaveState[key] = false;
-    if (expertiseState) expertiseState[key] = false;
+// ---------- Asignación de característica del trasfondo ----------
+function renderBackgroundAllocation() {
+  const bg = getBackground();
+  const container = byId("bgAllocControls");
+  if (!bg) { container.innerHTML = "<p class='hint'>Elige un trasfondo para asignar +2/+1.</p>"; return; }
+  if (!state.backgroundAllocation || !bg.abilities.includes(state.backgroundAllocation.plus2Key) || !bg.abilities.includes(state.backgroundAllocation.plus1Key)) {
+    state.backgroundAllocation = { mode: "twoOne", plus2Key: bg.abilities[0], plus1Key: bg.abilities[1] };
   }
+  const alloc = state.backgroundAllocation;
+  const opt = sel => bg.abilities.map(k => `<option value="${k}" ${sel === k ? "selected" : ""}>${ABILITIES.find(a => a.key === k).name}</option>`).join("");
+  container.innerHTML = `
+    <label class="radio-row"><input type="radio" name="allocMode" value="twoOne" ${alloc.mode === "twoOne" ? "checked" : ""}> +2 / +1</label>
+    <label class="radio-row"><input type="radio" name="allocMode" value="allOne" ${alloc.mode === "allOne" ? "checked" : ""}> +1 / +1 / +1</label>
+    <div class="alloc-selects" id="allocSelects" style="${alloc.mode === "allOne" ? "display:none" : ""}">
+      <label>+2 a <select id="allocPlus2">${opt(alloc.plus2Key)}</select></label>
+      <label>+1 a <select id="allocPlus1">${opt(alloc.plus1Key)}</select></label>
+    </div>
+  `;
+  container.querySelectorAll('input[name="allocMode"]').forEach(r => r.addEventListener("change", e => {
+    state.backgroundAllocation.mode = e.target.value;
+    renderBackgroundAllocation();
+    recalcAll();
+  }));
+  const p2 = byId("allocPlus2"), p1 = byId("allocPlus1");
+  if (p2) p2.addEventListener("change", e => {
+    state.backgroundAllocation.plus2Key = e.target.value;
+    if (state.backgroundAllocation.plus1Key === e.target.value) {
+      state.backgroundAllocation.plus1Key = bg.abilities.find(k => k !== e.target.value);
+    }
+    renderBackgroundAllocation();
+    recalcAll();
+  });
+  if (p1) p1.addEventListener("change", e => {
+    state.backgroundAllocation.plus1Key = e.target.value;
+    recalcAll();
+  });
 }
 
-function dotClass(prof, exp) {
-  if (exp) return "dot expertise";
-  if (prof) return "dot prof";
-  return "dot";
-}
-
-function dotStateLabel(prof, exp) {
-  if (exp) return "Experticia";
-  if (prof) return "Competente";
-  return "Sin competencia";
-}
-
-function updateDotButton(el, name, prof, exp) {
-  el.className = dotClass(prof, exp);
-  el.setAttribute("aria-pressed", String(!!prof));
-  el.setAttribute("aria-label", `${name}: ${dotStateLabel(prof, exp)}. Pulsa para cambiar.`);
-}
-
+// ---------- Salvaciones (100% determinadas por la clase, no editables) ----------
 function renderSaves() {
   const box = byId("savesBox");
   box.innerHTML = "";
@@ -87,18 +120,29 @@ function renderSaves() {
     const row = document.createElement("div");
     row.className = "save-row";
     row.innerHTML = `
-      <button type="button" id="saveDot_${a.key}"></button>
+      <span class="dot readonly" aria-hidden="true" id="saveDot_${a.key}"></span>
       <span>${a.name}</span>
       <span class="bonus" id="saveBonus_${a.key}">+0</span>
     `;
     box.appendChild(row);
-    const dot = row.querySelector(`#saveDot_${a.key}`);
-    updateDotButton(dot, `Salvación de ${a.name}`, state.saveProf[a.key], false);
-    dot.addEventListener("click", () => {
-      cycleProf(state.saveProf, null, a.key, false);
-      recalcAll();
-    });
   });
+}
+
+// ---------- Habilidades ----------
+function dotClass(prof, exp) {
+  if (exp) return "dot expertise";
+  if (prof) return "dot prof";
+  return "dot";
+}
+function dotStateLabel(prof, exp) {
+  if (exp) return "Experticia";
+  if (prof) return "Competente";
+  return "Sin competencia";
+}
+function updateDotButton(el, name, prof, exp) {
+  el.className = dotClass(prof, exp);
+  el.setAttribute("aria-pressed", String(!!prof));
+  el.setAttribute("aria-label", `${name}: ${dotStateLabel(prof, exp)}. Pulsa para cambiar.`);
 }
 
 function renderSkills() {
@@ -116,10 +160,190 @@ function renderSkills() {
     const dot = row.querySelector(`#skillDot_${s.key}`);
     updateDotButton(dot, s.name, state.skillProf[s.key], state.skillExpertise[s.key]);
     dot.addEventListener("click", () => {
-      cycleProf(state.skillProf, state.skillExpertise, s.key, true);
+      cycleSkill(s.key);
       recalcAll();
     });
   });
+}
+
+function cycleSkill(key) {
+  const prof = !!state.skillProf[key];
+  const exp = !!state.skillExpertise[key];
+  if (!prof) { state.skillProf[key] = true; }
+  else if (!exp) { state.skillExpertise[key] = true; }
+  else { state.skillProf[key] = false; state.skillExpertise[key] = false; }
+}
+
+function renderSocialSkillsBox() {
+  const box = byId("socialSkillsBox");
+  box.innerHTML = "";
+  SOCIAL_SKILLS.forEach(key => {
+    const s = SKILLS.find(sk => sk.key === key);
+    const row = document.createElement("div");
+    row.className = "save-row";
+    row.innerHTML = `<span class="dot readonly" aria-hidden="true" id="socialDot_${key}"></span><span>${s.name}</span><span class="bonus" id="socialBonus_${key}">+0</span>`;
+    box.appendChild(row);
+  });
+}
+
+// ---------- Habilidades de clase (elección) ----------
+function renderClassSkillChoices() {
+  const cls = getClass();
+  const config = cls && CLASS_SKILL_CHOICES[cls.key];
+  const box = byId("classSkillChoiceBox");
+  const label = byId("classSkillCountLabel");
+  if (!config) { box.innerHTML = ""; label.textContent = ""; return; }
+  label.textContent = `(elige ${config.count} · ${state.classSkillChoices.length}/${config.count} seleccionadas)`;
+  box.innerHTML = "";
+  config.options.forEach(key => {
+    const skill = SKILLS.find(s => s.key === key);
+    const checked = state.classSkillChoices.includes(key);
+    const disabled = !checked && state.classSkillChoices.length >= config.count;
+    const row = document.createElement("label");
+    row.className = "choice-row";
+    row.innerHTML = `<input type="checkbox" value="${key}" ${checked ? "checked" : ""} ${disabled ? "disabled" : ""}> ${skill.name}`;
+    box.appendChild(row);
+    row.querySelector("input").addEventListener("change", e => {
+      const bg = getBackground();
+      if (e.target.checked) {
+        state.classSkillChoices.push(key);
+        state.skillProf[key] = true;
+      } else {
+        state.classSkillChoices = state.classSkillChoices.filter(k => k !== key);
+        if (!bg || !bg.skills.includes(key)) state.skillProf[key] = false;
+      }
+      renderClassSkillChoices();
+      renderSkills();
+      recalcAll();
+    });
+  });
+}
+
+// ---------- Inventario, equipo y equipamientos (loadouts) ----------
+function computeItemDetail(item) {
+  if (item.category === "armor") {
+    const { baseAC, maxDex, strMin } = item.armor;
+    const dexTxt = maxDex === null ? "" : maxDex === 0 ? " (sin Destreza)" : ` (máx. Destreza +${maxDex})`;
+    return `CA base ${baseAC}${dexTxt}${strMin ? `, Fuerza mín. ${strMin}` : ""}`;
+  }
+  if (item.category === "shield") return `+${item.shieldBonus} CA`;
+  if (item.category === "weapon") return `${item.weapon.damage} ${item.weapon.damageType}${item.weapon.properties ? " — " + item.weapon.properties : ""}`;
+  if (item.category === "gear") return item.acBonus ? `+${item.acBonus} CA` : "Sin efecto mecánico";
+  return "";
+}
+
+function renderInventory() {
+  const tbody = byId("inventoryTable").querySelector("tbody");
+  tbody.innerHTML = "";
+  state.inventory.forEach(item => {
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td><input type="checkbox" data-id="${item.id}" ${item.equipped ? "checked" : ""} title="Equipado"></td>
+      <td>${item.name}</td>
+      <td>${CATEGORY_LABELS[item.category] || item.category}</td>
+      <td>${computeItemDetail(item)}</td>
+      <td class="no-print"><button class="small-btn" data-del="${item.id}">✕</button></td>
+    `;
+    tbody.appendChild(tr);
+  });
+  tbody.querySelectorAll("input[type=checkbox]").forEach(cb => {
+    cb.addEventListener("change", e => {
+      const item = state.inventory.find(i => i.id === e.target.dataset.id);
+      item.equipped = e.target.checked;
+      state.activeLoadoutId = null;
+      renderLoadoutBars();
+      recalcAll();
+    });
+  });
+  tbody.querySelectorAll("button[data-del]").forEach(btn => {
+    btn.addEventListener("click", e => {
+      const id = e.target.dataset.del;
+      state.inventory = state.inventory.filter(i => i.id !== id);
+      state.loadouts.forEach(l => { l.itemIds = l.itemIds.filter(itemId => itemId !== id); });
+      renderInventory();
+      renderLoadoutBars();
+      recalcAll();
+    });
+  });
+}
+
+byId("btnAddItem").addEventListener("click", () => {
+  const idx = Number(byId("newItemCatalog").value);
+  const proto = ITEM_CATALOG[idx];
+  state.inventory.push({ id: uid(), ...structuredClone(proto), equipped: false });
+  renderInventory();
+  recalcAll();
+});
+
+function renderLoadoutBars() {
+  [byId("loadoutBarCombat"), byId("loadoutBarExplore")].forEach(bar => {
+    bar.innerHTML = "";
+    if (!state.loadouts.length) { bar.innerHTML = "<p class='hint'>Sin equipamientos guardados todavía.</p>"; return; }
+    state.loadouts.forEach(lo => {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "loadout-chip" + (state.activeLoadoutId === lo.id ? " active" : "");
+      btn.textContent = lo.name;
+      btn.title = "Equipar este conjunto";
+      btn.addEventListener("click", () => activateLoadout(lo.id));
+      bar.appendChild(btn);
+    });
+  });
+}
+
+function activateLoadout(loadoutId) {
+  const lo = state.loadouts.find(l => l.id === loadoutId);
+  if (!lo) return;
+  state.inventory.forEach(item => {
+    if (["armor", "shield", "weapon", "gear"].includes(item.category)) {
+      item.equipped = lo.itemIds.includes(item.id);
+    }
+  });
+  state.activeLoadoutId = loadoutId;
+  renderInventory();
+  renderLoadoutBars();
+  recalcAll();
+}
+
+byId("btnSaveLoadout").addEventListener("click", () => {
+  const name = prompt("Nombre del equipamiento (ej. \"Combate pesado\", \"Sigilo\")");
+  if (!name) return;
+  const itemIds = state.inventory.filter(i => i.equipped).map(i => i.id);
+  const lo = { id: uid(), name, itemIds };
+  state.loadouts.push(lo);
+  state.activeLoadoutId = lo.id;
+  renderLoadoutBars();
+});
+
+// ---------- Clase de Armadura (computada en vivo) ----------
+function computeAC() {
+  const dexMod = abilityMod("dex");
+  const cls = getClass();
+  const armor = state.inventory.find(i => i.category === "armor" && i.equipped);
+  const shield = state.inventory.find(i => i.category === "shield" && i.equipped);
+  const gearBonuses = state.inventory.filter(i => i.category === "gear" && i.equipped && i.acBonus);
+  const parts = [];
+  let base, dexApplied;
+
+  if (armor) {
+    base = armor.armor.baseAC;
+    dexApplied = armor.armor.maxDex === null ? dexMod : Math.min(dexMod, armor.armor.maxDex);
+    parts.push(`${armor.name} ${base}`);
+    parts.push(`Destreza ${fmtMod(dexApplied)}`);
+  } else {
+    base = 10;
+    dexApplied = dexMod;
+    parts.push("Sin armadura 10");
+    parts.push(`Destreza ${fmtMod(dexApplied)}`);
+    if (cls && cls.key === "barbarian") { const c = abilityMod("con"); base += c; parts.push(`Constitución ${fmtMod(c)}`); }
+    if (cls && cls.key === "monk") { const w = abilityMod("wis"); base += w; parts.push(`Sabiduría ${fmtMod(w)}`); }
+  }
+  let total = base + dexApplied;
+  if (shield) { total += shield.shieldBonus; parts.push(`${shield.name} +${shield.shieldBonus}`); }
+  gearBonuses.forEach(g => { total += g.acBonus; parts.push(`${g.name} +${g.acBonus}`); });
+  const manual = Number(byId("acManualBonus").value) || 0;
+  if (manual) { total += manual; parts.push(`Otros ${fmtMod(manual)}`); }
+  return { total, breakdown: parts.join(" + ") };
 }
 
 // ---------- Ataques ----------
@@ -199,47 +423,91 @@ function renderSpellLevels() {
   });
 }
 
-// ---------- Recalculo automático ----------
+// ---------- Dados de golpe ----------
+function updateHitDiceDisplay() {
+  const cls = getClass();
+  const level = getLevel();
+  byId("hitDiceDisplay").textContent = cls ? `${level}d${cls.hitDie}` : `${level}d?`;
+  byId("hitDiceUsed").textContent = state.hitDiceUsed;
+}
+byId("hitDiceMinus").addEventListener("click", () => {
+  state.hitDiceUsed = Math.max(0, state.hitDiceUsed - 1);
+  updateHitDiceDisplay();
+});
+byId("hitDicePlus").addEventListener("click", () => {
+  state.hitDiceUsed = Math.min(getLevel(), state.hitDiceUsed + 1);
+  updateHitDiceDisplay();
+});
+
+// ---------- Recalculo automático (motor reactivo) ----------
 function recalcAll() {
-  const level = Number(byId("charLevel").value) || 1;
+  const level = getLevel();
   const pb = proficiencyBonusForLevel(level);
-  byId("profBonus").textContent = fmtMod(pb);
+  const cls = getClass();
+  const sp = getSpecies();
 
   ABILITIES.forEach(a => {
-    const m = mod(state.abilities[a.key]);
-    byId(`mod_${a.key}`).textContent = fmtMod(m);
-    const saveBonus = m + (state.saveProf[a.key] ? pb : 0);
-    byId(`saveBonus_${a.key}`).textContent = fmtMod(saveBonus);
-    const dot = byId(`saveDot_${a.key}`);
-    if (dot) updateDotButton(dot, `Salvación de ${a.name}`, state.saveProf[a.key], false);
+    const total = totalAbility(a.key);
+    const bonus = backgroundBonusFor(a.key);
+    byId(`mod_${a.key}`).textContent = fmtMod(mod(total));
+    const totalEl = byId(`total_${a.key}`);
+    totalEl.textContent = bonus ? `Total ${total}` : "";
   });
 
+  // Salvaciones: 100% derivadas de la clase.
+  ABILITIES.forEach(a => {
+    const isProf = !!(cls && cls.saves.includes(a.key));
+    const bonus = abilityMod(a.key) + (isProf ? pb : 0);
+    byId(`saveBonus_${a.key}`).textContent = fmtMod(bonus);
+    const dot = byId(`saveDot_${a.key}`);
+    if (dot) dot.className = "dot readonly" + (isProf ? " prof" : "");
+  });
+
+  // Habilidades
   SKILLS.forEach(s => {
-    const m = mod(state.abilities[s.ability]);
+    const m = abilityMod(s.ability);
     let bonus = m;
     if (state.skillExpertise[s.key]) bonus += pb * 2;
     else if (state.skillProf[s.key]) bonus += pb;
-    byId(`skillBonus_${s.key}`).textContent = fmtMod(bonus);
+    const bonusEl = byId(`skillBonus_${s.key}`);
+    if (bonusEl) bonusEl.textContent = fmtMod(bonus);
     const dot = byId(`skillDot_${s.key}`);
     if (dot) updateDotButton(dot, s.name, state.skillProf[s.key], state.skillExpertise[s.key]);
   });
+  SOCIAL_SKILLS.forEach(key => {
+    const s = SKILLS.find(sk => sk.key === key);
+    const m = abilityMod(s.ability);
+    let bonus = m;
+    if (state.skillExpertise[key]) bonus += pb * 2;
+    else if (state.skillProf[key]) bonus += pb;
+    const bonusEl = byId(`socialBonus_${key}`);
+    if (bonusEl) bonusEl.textContent = fmtMod(bonus);
+    const dot = byId(`socialDot_${key}`);
+    if (dot) dot.className = "dot readonly" + (state.skillExpertise[key] ? " expertise" : state.skillProf[key] ? " prof" : "");
+  });
 
-  const dexMod = mod(state.abilities.dex);
+  const dexMod = abilityMod("dex");
   byId("initiative").textContent = fmtMod(dexMod);
 
-  const wisMod = mod(state.abilities.wis);
-  const intMod = mod(state.abilities.int);
+  const wisMod = abilityMod("wis");
+  const intMod = abilityMod("int");
   const bonusFor = key => (state.skillExpertise[key] ? pb * 2 : (state.skillProf[key] ? pb : 0));
   byId("passivePerception").textContent = 10 + wisMod + bonusFor("perception");
   byId("passiveInvestigation").textContent = 10 + intMod + bonusFor("investigation");
   byId("passiveInsight").textContent = 10 + wisMod + bonusFor("insight");
 
+  // Clase de Armadura
+  const ac = computeAC();
+  byId("acTotal").textContent = ac.total;
+  byId("acBreakdown").textContent = ac.breakdown;
+  byId("equippedSummary").textContent = state.inventory.some(i => i.equipped)
+    ? "Equipado: " + state.inventory.filter(i => i.equipped).map(i => i.name).join(", ")
+    : "Sin objetos equipados.";
+
   // Conjuros
-  const classKey = byId("charClass").value;
-  const cls = CLASSES.find(c => c.key === classKey);
   const spellAbilityKey = cls ? cls.spellAbility : null;
   if (spellAbilityKey) {
-    const spellMod = mod(state.abilities[spellAbilityKey]);
+    const spellMod = abilityMod(spellAbilityKey);
     byId("spellAbility").value = ABILITIES.find(a => a.key === spellAbilityKey).name;
     byId("spellSaveDC").textContent = 8 + pb + spellMod;
     byId("spellAttackBonus").textContent = fmtMod(pb + spellMod);
@@ -249,14 +517,25 @@ function recalcAll() {
     byId("spellAttackBonus").textContent = "—";
   }
 
+  updateHitDiceDisplay();
+
+  // Sentidos de especie (computado, no destructivo)
+  byId("speciesSenses").textContent = sp ? `${sp.name}: ${sp.traits}` : "";
+
+  // Rail de resumen (siempre visible sin importar la pantalla activa)
+  byId("qgAC").textContent = ac.total;
+  byId("qgInit").textContent = fmtMod(dexMod);
+  byId("qgHP").textContent = `${byId("hpCurrent").value || 0}/${byId("hpMax").value || 0}`;
+  byId("qgProf").textContent = fmtMod(pb);
+
   updatePrintHeader();
 }
 
 function updatePrintHeader() {
   const name = byId("charName").value || "Personaje sin nombre";
-  const cls = CLASSES.find(c => c.key === byId("charClass").value);
-  const sp = SPECIES.find(s => s.key === byId("charSpecies").value);
-  const bg = BACKGROUNDS.find(b => b.key === byId("charBackground").value);
+  const cls = getClass();
+  const sp = getSpecies();
+  const bg = getBackground();
   const level = byId("charLevel").value || 1;
   byId("printName").textContent = name;
   byId("printSubtitle").textContent = [
@@ -269,49 +548,59 @@ function updatePrintHeader() {
 
 // ---------- Info de referencia (clase/especie/trasfondo) ----------
 function renderReferenceInfo() {
-  const cls = CLASSES.find(c => c.key === byId("charClass").value);
-  const sp = SPECIES.find(s => s.key === byId("charSpecies").value);
-  const bg = BACKGROUNDS.find(b => b.key === byId("charBackground").value);
-
+  const cls = getClass();
+  const sp = getSpecies();
+  const bg = getBackground();
   byId("refClass").innerHTML = cls ? `<strong>${cls.name}</strong><br>Dado de golpe: d${cls.hitDie}<br>Salvaciones: ${cls.saves.map(k => k.toUpperCase()).join(", ")}` : "";
-  byId("refSpecies").innerHTML = sp ? `<strong>${sp.name}</strong><br>Talla: ${sp.size} · Velocidad: ${sp.speed} pies<br>${sp.traits}` : "";
-  byId("refBackground").innerHTML = bg ? `<strong>${bg.name}</strong><br>Habilidades: ${bg.skills.map(k => SKILLS.find(s => s.key === k).name).join(", ")}<br>Herramienta: ${bg.tool}<br>Dote: ${bg.feat}<br>Equipo: ${bg.equipment}` : "";
+  byId("refSpecies").innerHTML = sp ? `<strong>${sp.name}</strong><br>Talla: ${sp.size} · Velocidad: ${sp.speed} pies` : "";
+  byId("refBackground").innerHTML = bg ? `<strong>${bg.name}</strong><br>Herramienta: ${bg.tool}<br>Dote: ${bg.feat}<br>Equipo: ${bg.equipment}` : "";
 }
 
-function applyDefaults() {
-  const cls = CLASSES.find(c => c.key === byId("charClass").value);
-  const sp = SPECIES.find(s => s.key === byId("charSpecies").value);
-  const bg = BACKGROUNDS.find(b => b.key === byId("charBackground").value);
+// ---------- Cambios de Clase / Especie / Trasfondo (reactivos, sin botón) ----------
+function onClassChange() {
+  const bg = getBackground();
+  state.classSkillChoices.forEach(key => {
+    if (!bg || !bg.skills.includes(key)) state.skillProf[key] = false;
+  });
+  state.classSkillChoices = [];
+  renderClassSkillChoices();
+  renderSkills();
+  renderReferenceInfo();
+  recalcAll();
+}
 
-  if (cls) {
-    cls.saves.forEach(k => { state.saveProf[k] = true; });
-    byId("hitDice").value = `1d${cls.hitDie}`;
-  }
+function onSpeciesChange() {
+  const sp = getSpecies();
+  if (sp) byId("speed").value = sp.speed;
+  renderReferenceInfo();
+  recalcAll();
+}
+
+function onBackgroundChange() {
+  (state.bgGrantedSkills || []).forEach(key => {
+    if (!state.classSkillChoices.includes(key)) state.skillProf[key] = false;
+  });
+  const bg = getBackground();
+  state.bgGrantedSkills = bg ? [...bg.skills] : [];
+  state.bgGrantedSkills.forEach(key => { state.skillProf[key] = true; });
   if (bg) {
-    bg.skills.forEach(k => { state.skillProf[k] = true; });
     byId("originFeat").value = bg.feat;
     byId("originFeatDesc").value = ORIGIN_FEATS.find(f => bg.feat.startsWith(f.name))?.summary || "";
-    byId("otherProficiencies").value = [byId("otherProficiencies").value, bg.tool].filter(Boolean).join("\n");
-    byId("equipment").value = [byId("equipment").value, bg.equipment].filter(Boolean).join("\n");
-    const [a, b2] = bg.abilities;
-    state.abilities[a] = (state.abilities[a] || 10) + 2;
-    state.abilities[b2] = (state.abilities[b2] || 10) + 1;
-    renderAbilities();
   }
-  if (sp) {
-    byId("speed").value = sp.speed;
-    byId("featuresTraits").value = [byId("featuresTraits").value, `${sp.name}: ${sp.traits}`].filter(Boolean).join("\n\n");
-  }
-  renderSaves();
+  state.backgroundAllocation = null;
+  renderBackgroundAllocation();
+  renderClassSkillChoices();
   renderSkills();
+  renderReferenceInfo();
   recalcAll();
 }
 
 // ---------- Descansos ----------
 byId("btnLongRest").addEventListener("click", () => {
-  if (!confirm("¿Realizar un Descanso Largo? Esto restaura los PG al máximo, quita PG temporales, reinicia espacios de conjuro y salvaciones de muerte.")) return;
+  if (!confirm("¿Realizar un Descanso Largo? Esto restaura los PG al máximo, quita PG temporales, recupera la mitad de los Dados de Golpe y reinicia espacios de conjuro y salvaciones de muerte.")) return;
   byId("hpCurrent").value = byId("hpMax").value || 0;
   byId("hpTemp").value = 0;
+  state.hitDiceUsed = Math.max(0, state.hitDiceUsed - Math.max(1, Math.floor(getLevel() / 2)));
   Object.keys(state.spellSlots).forEach(lvl => { state.spellSlots[lvl].used = 0; });
   renderSpellSlots();
   ["ds_s1", "ds_s2", "ds_s3", "ds_f1", "ds_f2", "ds_f3"].forEach(id => { byId(id).checked = false; });
@@ -319,12 +608,13 @@ byId("btnLongRest").addEventListener("click", () => {
 });
 byId("btnShortRest").addEventListener("click", () => {
   if (!confirm("¿Realizar un Descanso Corto? Puedes gastar Dados de Golpe para recuperar PG manualmente.")) return;
-  alert("Descanso corto registrado. Ajusta manualmente los PG si gastas Dados de Golpe (y los espacios de Pacto si eres Brujo).");
+  alert("Descanso corto registrado. Usa +/- en Dados de Golpe y ajusta los PG si gastas alguno (y los espacios de Pacto si eres Brujo).");
 });
 byId("btnHeal").addEventListener("click", () => {
   const amount = Number(prompt("¿Cuántos PG curar?", "0")) || 0;
   const max = Number(byId("hpMax").value) || 0;
   byId("hpCurrent").value = Math.min(max, (Number(byId("hpCurrent").value) || 0) + amount);
+  recalcAll();
 });
 byId("btnDamage").addEventListener("click", () => {
   const amount = Number(prompt("¿Cuánto daño recibir?", "0")) || 0;
@@ -339,27 +629,97 @@ byId("btnDamage").addEventListener("click", () => {
   current = Math.max(0, current - remaining);
   byId("hpTemp").value = temp;
   byId("hpCurrent").value = current;
+  recalcAll();
 });
 
-// ---------- Pestañas ----------
-document.querySelectorAll(".tab-btn").forEach(btn => {
+// ---------- Pantallas (Combate / Explorar / Magia / Interacción) ----------
+document.querySelectorAll(".screen-btn").forEach(btn => {
   btn.addEventListener("click", () => {
-    document.querySelectorAll(".tab-btn").forEach(b => b.classList.remove("active"));
-    document.querySelectorAll(".tab-panel").forEach(p => p.classList.remove("active"));
+    document.querySelectorAll(".screen-btn").forEach(b => b.classList.remove("active"));
+    document.querySelectorAll(".screen").forEach(s => s.classList.remove("active"));
     btn.classList.add("active");
-    document.querySelector(`.tab-panel[data-panel="${btn.dataset.tab}"]`).classList.add("active");
+    document.querySelector(`.screen[data-screen="${btn.dataset.screen}"]`).classList.add("active");
   });
 });
+
+// ---------- Personajes de ejemplo ----------
+function loadSampleCharacter(key) {
+  const sample = SAMPLE_CHARACTERS[key];
+  if (!sample) return;
+  if (!confirm(`¿Cargar el personaje de ejemplo "${sample.identity.name}"? Se perderán los cambios no guardados.`)) return;
+
+  byId("charName").value = sample.identity.name;
+  byId("playerName").value = sample.identity.playerName || "";
+  byId("charClass").value = sample.identity.classKey;
+  byId("charLevel").value = sample.identity.level;
+  byId("charSpecies").value = sample.identity.speciesKey;
+  byId("charBackground").value = sample.identity.backgroundKey;
+  byId("charAlignment").value = sample.identity.alignment;
+  byId("charXP").value = sample.identity.xp;
+  byId("speed").value = (SPECIES.find(s => s.key === sample.identity.speciesKey) || {}).speed || 30;
+
+  state.abilitiesBase = { ...sample.abilitiesBase };
+  state.backgroundAllocation = { ...sample.backgroundAllocation };
+  state.classSkillChoices = [...sample.classSkillChoices];
+  state.bgGrantedSkills = [...((BACKGROUNDS.find(b => b.key === sample.identity.backgroundKey) || {}).skills || [])];
+  state.skillProf = {};
+  state.skillExpertise = {};
+  [...state.classSkillChoices, ...state.bgGrantedSkills].forEach(k => { state.skillProf[k] = true; });
+  (sample.skillExpertise || []).forEach(k => { state.skillProf[k] = true; state.skillExpertise[k] = true; });
+
+  byId("hpMax").value = sample.hp.max;
+  byId("hpCurrent").value = sample.hp.current;
+  byId("hpTemp").value = sample.hp.temp;
+  byId("acManualBonus").value = 0;
+  state.hitDiceUsed = 0;
+
+  state.inventory = sample.inventory.map(it => ({ id: uid(), ...structuredClone(it) }));
+  state.loadouts = sample.loadoutDefs.map(lo => ({
+    id: uid(),
+    name: lo.name,
+    itemIds: lo.itemNames.map(n => (state.inventory.find(i => i.name === n) || {}).id).filter(Boolean),
+  }));
+  const active = state.loadouts.find(l => l.name === sample.activeLoadoutName);
+  state.activeLoadoutId = active ? active.id : null;
+
+  state.attacks = sample.attacks.map(a => ({ ...a }));
+  state.spellSlots = {};
+  if (sample.spellSlots) Object.entries(sample.spellSlots).forEach(([lvl, v]) => { state.spellSlots[lvl] = { ...v }; });
+  state.spells = {};
+
+  byId("featuresTraits").value = sample.featuresTraits || "";
+  byId("originFeat").value = sample.originFeat || "";
+  byId("originFeatDesc").value = ORIGIN_FEATS.find(f => (sample.originFeat || "").startsWith(f.name))?.summary || "";
+  byId("otherProficiencies").value = sample.otherProficiencies || "";
+  byId("equipment").value = "";
+  byId("treasure").value = "";
+
+  renderAbilities();
+  renderBackgroundAllocation();
+  renderSaves();
+  renderSkills();
+  renderSocialSkillsBox();
+  renderClassSkillChoices();
+  renderAttacks();
+  renderSpellSlots();
+  renderSpellLevels();
+  renderInventory();
+  renderLoadoutBars();
+  renderReferenceInfo();
+  recalcAll();
+}
+byId("btnLoadRogue").addEventListener("click", () => loadSampleCharacter("rogue"));
+byId("btnLoadPaladin").addEventListener("click", () => loadSampleCharacter("paladin"));
 
 // ---------- Guardar / Cargar ----------
 const TEXT_FIELD_IDS = [
   "charName", "charClass", "charLevel", "charBackground", "charSpecies", "charAlignment", "charXP", "playerName",
-  "ac", "speed", "hpMax", "hpCurrent", "hpTemp", "hitDice", "equipment", "treasure",
+  "acManualBonus", "speed", "hpMax", "hpCurrent", "hpTemp", "equipment", "treasure",
   "personalityTraits", "ideals", "bonds", "flaws", "originFeat", "originFeatDesc", "featuresTraits", "otherProficiencies",
   "age", "height", "weight", "eyes", "skin", "hair", "alliesOrgs", "backstory", "spellClass",
   "defenses", "conditions", "senses", "notes",
 ];
-const CHECKBOX_IDS = ["inspiration", "ds_s1", "ds_s2", "ds_s3", "ds_f1", "ds_f2", "ds_f3"];
+const CHECKBOX_IDS = ["inspiration", "concentration", "ds_s1", "ds_s2", "ds_s3", "ds_f1", "ds_f2", "ds_f3"];
 
 function collectFormValues() {
   const values = {};
@@ -367,7 +727,6 @@ function collectFormValues() {
   CHECKBOX_IDS.forEach(id => { const el = byId(id); if (el) values[id] = el.checked; });
   return values;
 }
-
 function applyFormValues(values) {
   Object.entries(values).forEach(([id, val]) => {
     const el = byId(id);
@@ -380,32 +739,50 @@ function applyFormValues(values) {
 function getFullState() {
   return {
     form: collectFormValues(),
-    abilities: state.abilities,
-    saveProf: state.saveProf,
+    abilitiesBase: state.abilitiesBase,
+    backgroundAllocation: state.backgroundAllocation,
+    classSkillChoices: state.classSkillChoices,
+    bgGrantedSkills: state.bgGrantedSkills,
     skillProf: state.skillProf,
     skillExpertise: state.skillExpertise,
     attacks: state.attacks,
     spellSlots: state.spellSlots,
     spells: state.spells,
+    inventory: state.inventory,
+    loadouts: state.loadouts,
+    activeLoadoutId: state.activeLoadoutId,
+    hitDiceUsed: state.hitDiceUsed,
   };
 }
 
 function loadFullState(data) {
   if (!data) return;
-  Object.assign(state.abilities, data.abilities || {});
-  state.saveProf = data.saveProf || {};
+  state.abilitiesBase = data.abilitiesBase || { str: 10, dex: 10, con: 10, wis: 10, int: 10, cha: 10 };
+  state.backgroundAllocation = data.backgroundAllocation || null;
+  state.classSkillChoices = data.classSkillChoices || [];
+  state.bgGrantedSkills = data.bgGrantedSkills || [];
   state.skillProf = data.skillProf || {};
   state.skillExpertise = data.skillExpertise || {};
   state.attacks = data.attacks && data.attacks.length ? data.attacks : [{ name: "", range: "", bonus: "", damage: "", notes: "" }];
   state.spellSlots = data.spellSlots || {};
   state.spells = data.spells || {};
+  state.inventory = data.inventory || [];
+  state.loadouts = data.loadouts || [];
+  state.activeLoadoutId = data.activeLoadoutId || null;
+  state.hitDiceUsed = data.hitDiceUsed || 0;
+
+  if (data.form) applyFormValues(data.form);
   renderAbilities();
+  renderBackgroundAllocation();
   renderSaves();
   renderSkills();
+  renderSocialSkillsBox();
+  renderClassSkillChoices();
   renderAttacks();
   renderSpellSlots();
   renderSpellLevels();
-  if (data.form) applyFormValues(data.form);
+  renderInventory();
+  renderLoadoutBars();
   renderReferenceInfo();
   recalcAll();
 }
@@ -416,13 +793,11 @@ byId("btnSave").addEventListener("click", () => {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(getFullState()));
   alert("Personaje guardado en este navegador.");
 });
-
 byId("btnLoad").addEventListener("click", () => {
   const raw = localStorage.getItem(STORAGE_KEY);
   if (!raw) { alert("No hay ningún personaje guardado."); return; }
   loadFullState(JSON.parse(raw));
 });
-
 byId("btnExport").addEventListener("click", () => {
   const blob = new Blob([JSON.stringify(getFullState(), null, 2)], { type: "application/json" });
   const url = URL.createObjectURL(blob);
@@ -433,7 +808,6 @@ byId("btnExport").addEventListener("click", () => {
   a.click();
   URL.revokeObjectURL(url);
 });
-
 byId("btnImport").addEventListener("change", e => {
   const file = e.target.files[0];
   if (!file) return;
@@ -441,32 +815,38 @@ byId("btnImport").addEventListener("change", e => {
   reader.onload = () => loadFullState(JSON.parse(reader.result));
   reader.readAsText(file);
 });
-
 byId("btnReset").addEventListener("click", () => {
   if (!confirm("¿Crear un personaje nuevo? Se perderán los cambios no guardados.")) return;
   localStorage.removeItem(STORAGE_KEY);
   location.reload();
 });
-
 byId("btnPrint").addEventListener("click", () => window.print());
-byId("btnApplyDefaults").addEventListener("click", applyDefaults);
 
 // ---------- Listeners generales ----------
-["charClass", "charSpecies", "charBackground", "charLevel", "charName", "charAlignment"].forEach(id => {
-  byId(id).addEventListener("change", () => { renderReferenceInfo(); recalcAll(); });
-});
+byId("charClass").addEventListener("change", onClassChange);
+byId("charSpecies").addEventListener("change", onSpeciesChange);
+byId("charBackground").addEventListener("change", onBackgroundChange);
 byId("charLevel").addEventListener("input", recalcAll);
+byId("charAlignment").addEventListener("change", updatePrintHeader);
 byId("charName").addEventListener("input", updatePrintHeader);
+byId("acManualBonus").addEventListener("input", recalcAll);
+byId("hpCurrent").addEventListener("input", recalcAll);
+byId("hpMax").addEventListener("input", recalcAll);
 
 // ---------- Inicialización ----------
 function init() {
   populateSelects();
   renderAbilities();
+  renderBackgroundAllocation();
   renderSaves();
   renderSkills();
+  renderSocialSkillsBox();
+  renderClassSkillChoices();
   renderAttacks();
   renderSpellSlots();
   renderSpellLevels();
+  renderInventory();
+  renderLoadoutBars();
   renderReferenceInfo();
 
   const raw = localStorage.getItem(STORAGE_KEY);
