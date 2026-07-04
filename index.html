@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Hoja de Personaje — D&amp;D 2024</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div class="toolbar no-print">
+  <h1>Hoja de Personaje · D&amp;D 2024</h1>
+  <div class="toolbar-actions">
+    <button id="btnSave">💾 Guardar</button>
+    <button id="btnLoad">📂 Cargar</button>
+    <button id="btnExport">⬇️ Exportar JSON</button>
+    <label class="file-btn">⬆️ Importar JSON<input type="file" id="btnImport" accept="application/json" hidden></label>
+    <button id="btnReset">♻️ Nuevo</button>
+    <button id="btnPrint">🖨️ Imprimir</button>
+  </div>
+</div>
+
+<main class="sheet" id="sheet">
+
+  <!-- ENCABEZADO -->
+  <section class="card header-card">
+    <div class="field grow">
+      <label>Nombre del Personaje</label>
+      <input type="text" id="charName">
+    </div>
+    <div class="field">
+      <label>Clase y Nivel</label>
+      <div class="inline">
+        <select id="charClass"></select>
+        <input type="number" id="charLevel" min="1" max="20" value="1" class="tiny">
+      </div>
+    </div>
+    <div class="field">
+      <label>Trasfondo</label>
+      <select id="charBackground"></select>
+    </div>
+    <div class="field">
+      <label>Especie</label>
+      <select id="charSpecies"></select>
+    </div>
+    <div class="field">
+      <label>Alineamiento</label>
+      <select id="charAlignment"></select>
+    </div>
+    <div class="field">
+      <label>Puntos de Experiencia</label>
+      <input type="number" id="charXP" min="0" value="0">
+    </div>
+    <div class="field">
+      <label>Jugador</label>
+      <input type="text" id="playerName">
+    </div>
+  </section>
+
+  <section class="card info-card no-print" id="referenceInfo">
+    <div class="ref-col" id="refClass"></div>
+    <div class="ref-col" id="refSpecies"></div>
+    <div class="ref-col" id="refBackground"></div>
+    <button id="btnApplyDefaults" class="apply-btn">✨ Aplicar bonificaciones de Especie/Trasfondo/Clase</button>
+  </section>
+
+  <!-- CUERPO PRINCIPAL -->
+  <div class="main-grid">
+
+    <!-- COLUMNA IZQUIERDA: Características -->
+    <div class="col col-left">
+      <div id="abilitiesBox"></div>
+
+      <div class="card">
+        <div class="stat-box">
+          <label>Bonif. de Competencia</label>
+          <div class="stat-value" id="profBonus">+2</div>
+        </div>
+        <div class="stat-box">
+          <label>Inspiración</label>
+          <input type="checkbox" id="inspiration" class="big-check">
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>Salvaciones</h3>
+        <div id="savesBox"></div>
+      </div>
+
+      <div class="card">
+        <h3>Habilidades</h3>
+        <div class="skills-head">
+          <span>Comp.</span><span>Exp.</span><span></span><span></span>
+        </div>
+        <div id="skillsBox"></div>
+      </div>
+
+      <div class="card">
+        <div class="stat-box">
+          <label>Percepción Pasiva</label>
+          <div class="stat-value" id="passivePerception">10</div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>Otras Competencias e Idiomas</h3>
+        <textarea id="otherProficiencies" rows="4"></textarea>
+      </div>
+    </div>
+
+    <!-- COLUMNA CENTRO: Combate -->
+    <div class="col col-mid">
+      <div class="card three-up">
+        <div class="stat-box">
+          <label>Clase de Armadura</label>
+          <input type="number" id="ac" value="10">
+        </div>
+        <div class="stat-box">
+          <label>Iniciativa</label>
+          <div class="stat-value" id="initiative">+0</div>
+        </div>
+        <div class="stat-box">
+          <label>Velocidad</label>
+          <input type="number" id="speed" value="30">
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="field">
+          <label>Puntos de Golpe Máximos</label>
+          <input type="number" id="hpMax" value="0">
+        </div>
+        <div class="two-up">
+          <div class="field">
+            <label>PG Actuales</label>
+            <input type="number" id="hpCurrent" value="0">
+          </div>
+          <div class="field">
+            <label>PG Temporales</label>
+            <input type="number" id="hpTemp" value="0">
+          </div>
+        </div>
+      </div>
+
+      <div class="card two-up">
+        <div class="field">
+          <label>Dados de Golpe</label>
+          <input type="text" id="hitDice" placeholder="ej. 3d8">
+        </div>
+        <div class="death-saves">
+          <label>Salvaciones de Muerte</label>
+          <div class="ds-row">Éxitos <input type="checkbox"><input type="checkbox"><input type="checkbox"></div>
+          <div class="ds-row">Fallos <input type="checkbox"><input type="checkbox"><input type="checkbox"></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>Ataques y Conjuros de Combate</h3>
+        <table class="attacks-table" id="attacksTable">
+          <thead><tr><th>Nombre</th><th>Bonif./DG</th><th>Daño/Tipo</th><th></th></tr></thead>
+          <tbody></tbody>
+        </table>
+        <button id="btnAddAttack" class="small-btn no-print">+ Añadir</button>
+      </div>
+
+      <div class="card">
+        <h3>Equipo</h3>
+        <textarea id="equipment" rows="6"></textarea>
+      </div>
+    </div>
+
+    <!-- COLUMNA DERECHA: Personalidad -->
+    <div class="col col-right">
+      <div class="card">
+        <h3>Rasgos de Personalidad</h3>
+        <textarea id="personalityTraits" rows="3"></textarea>
+      </div>
+      <div class="card">
+        <h3>Ideales</h3>
+        <textarea id="ideals" rows="3"></textarea>
+      </div>
+      <div class="card">
+        <h3>Vínculos</h3>
+        <textarea id="bonds" rows="3"></textarea>
+      </div>
+      <div class="card">
+        <h3>Defectos</h3>
+        <textarea id="flaws" rows="3"></textarea>
+      </div>
+      <div class="card">
+        <h3>Dote de Origen</h3>
+        <input type="text" id="originFeat" placeholder="ej. Alerta">
+        <textarea id="originFeatDesc" rows="2" placeholder="Descripción breve"></textarea>
+      </div>
+      <div class="card">
+        <h3>Rasgos y Habilidades de Clase/Especie</h3>
+        <textarea id="featuresTraits" rows="8"></textarea>
+      </div>
+    </div>
+  </div>
+
+  <!-- SEGUNDA PÁGINA: Detalles y trasfondo -->
+  <div class="page-break"></div>
+  <section class="card">
+    <h2>Detalles del Personaje</h2>
+    <div class="details-grid">
+      <div class="field"><label>Edad</label><input type="text" id="age"></div>
+      <div class="field"><label>Altura</label><input type="text" id="height"></div>
+      <div class="field"><label>Peso</label><input type="text" id="weight"></div>
+      <div class="field"><label>Ojos</label><input type="text" id="eyes"></div>
+      <div class="field"><label>Piel</label><input type="text" id="skin"></div>
+      <div class="field"><label>Pelo</label><input type="text" id="hair"></div>
+    </div>
+    <div class="field">
+      <label>Aliados y Organizaciones</label>
+      <textarea id="alliesOrgs" rows="4"></textarea>
+    </div>
+    <div class="field">
+      <label>Trasfondo del Personaje (Backstory)</label>
+      <textarea id="backstory" rows="8"></textarea>
+    </div>
+    <div class="field">
+      <label>Tesoro</label>
+      <textarea id="treasure" rows="4"></textarea>
+    </div>
+  </section>
+
+  <!-- TERCERA PÁGINA: Conjuros -->
+  <div class="page-break"></div>
+  <section class="card">
+    <h2>Lanzamiento de Conjuros</h2>
+    <div class="spell-header">
+      <div class="field">
+        <label>Clase de Conjuros</label>
+        <input type="text" id="spellClass">
+      </div>
+      <div class="field">
+        <label>Característica de Conjuros</label>
+        <input type="text" id="spellAbility" readonly>
+      </div>
+      <div class="stat-box">
+        <label>CD de Salvación</label>
+        <div class="stat-value" id="spellSaveDC">8</div>
+      </div>
+      <div class="stat-box">
+        <label>Bonif. de Ataque</label>
+        <div class="stat-value" id="spellAttackBonus">+0</div>
+      </div>
+    </div>
+
+    <div id="spellSlotsBox" class="spell-slots"></div>
+
+    <div id="spellLevelsBox" class="spell-levels"></div>
+  </section>
+
+  <p class="attribution no-print">
+    Contenido de reglas basado en el SRD 5.2 (D&amp;D 2024) de Wizards of the Coast, LLC, bajo licencia
+    <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC-BY-4.0</a>.
+  </p>
+</main>
+
+<script src="js/data.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
