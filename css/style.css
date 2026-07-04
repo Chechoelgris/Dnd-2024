@@ -5,14 +5,16 @@
   --panel-2: #2a201b;
   --ink: #f1e6db;
   --ink-dim: #b6a396;
-  --accent: #e2483d;
-  --accent-dim: #8c2e27;
-  --accent-glow: rgba(226, 72, 61, .25);
-  --line: #4a352e;
+  --accent: #ff6b5f;       /* text/values/borders: >=4.5:1 on bg and panel */
+  --accent-solid: #c02f24; /* solid button fills under white text: >=5.7:1 */
+  --accent-dim: #8c2e27;   /* decorative borders only, never under text */
+  --accent-glow: rgba(255, 107, 95, .18);
+  --line: #7c6656;         /* >=3:1 on bg-2/panel, meets WCAG 1.4.11 for control borders */
   --gold: #c9a367;
   --ok: #4caf6a;
   --shadow: 0 2px 10px rgba(0,0,0,.4);
   --radius: 10px;
+  --focus-ring: 0 0 0 3px rgba(255, 107, 95, .45);
 }
 
 :root[data-theme="light"] {
@@ -23,9 +25,10 @@
   --ink: #2b241a;
   --ink-dim: #6b5c48;
   --accent: #a3271f;
+  --accent-solid: #a3271f;
   --accent-dim: #d98e88;
   --accent-glow: rgba(163, 39, 31, .12);
-  --line: #d8cdb4;
+  --line: #ab8f68;
   --gold: #8c6d3f;
 }
 
@@ -141,7 +144,8 @@ input, select, textarea {
   padding: .35em .5em;
   border-radius: 5px;
 }
-input:focus, select:focus, textarea:focus { outline: none; border-color: var(--accent); }
+input:focus, select:focus, textarea:focus { outline: none; border-color: var(--accent); box-shadow: var(--focus-ring); }
+button:focus-visible, a:focus-visible, .tab-btn:focus-visible { outline: none; box-shadow: var(--focus-ring); }
 textarea { width: 100%; resize: vertical; }
 .field input, .field select, .field textarea { width: 100%; }
 input.tiny { width: 3.2em; }
@@ -169,13 +173,17 @@ input.tiny { width: 3.2em; }
 
 /* ---------- SAVES & SKILLS with dot indicator ---------- */
 .dot {
-  width: 14px; height: 14px; border-radius: 50%;
+  width: 18px; height: 18px; border-radius: 50%;
   border: 2px solid var(--ink-dim);
   display: inline-block; cursor: pointer; flex-shrink: 0;
   background: transparent;
+  padding: 0;
+  -webkit-appearance: none;
+  appearance: none;
 }
 .dot.prof { background: var(--accent); border-color: var(--accent); }
 .dot.expertise { background: var(--gold); border-color: var(--gold); box-shadow: 0 0 0 2px var(--accent) inset; }
+.dot:focus-visible { outline: none; box-shadow: var(--focus-ring); }
 
 .save-row, .skill-row {
   display: grid;
@@ -258,7 +266,7 @@ input.tiny { width: 3.2em; }
 .ref-col { flex: 1 1 220px; color: var(--ink-dim); }
 .ref-col strong { color: var(--ink); }
 .apply-btn {
-  background: var(--accent);
+  background: var(--accent-solid);
   color: #fff;
   border: none;
   padding: .55em .9em;

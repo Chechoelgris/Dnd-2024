@@ -68,6 +68,18 @@ function dotClass(prof, exp) {
   return "dot";
 }
 
+function dotStateLabel(prof, exp) {
+  if (exp) return "Experticia";
+  if (prof) return "Competente";
+  return "Sin competencia";
+}
+
+function updateDotButton(el, name, prof, exp) {
+  el.className = dotClass(prof, exp);
+  el.setAttribute("aria-pressed", String(!!prof));
+  el.setAttribute("aria-label", `${name}: ${dotStateLabel(prof, exp)}. Pulsa para cambiar.`);
+}
+
 function renderSaves() {
   const box = byId("savesBox");
   box.innerHTML = "";
@@ -75,12 +87,14 @@ function renderSaves() {
     const row = document.createElement("div");
     row.className = "save-row";
     row.innerHTML = `
-      <span class="${dotClass(state.saveProf[a.key], false)}" id="saveDot_${a.key}"></span>
+      <button type="button" id="saveDot_${a.key}"></button>
       <span>${a.name}</span>
       <span class="bonus" id="saveBonus_${a.key}">+0</span>
     `;
     box.appendChild(row);
-    row.querySelector(`#saveDot_${a.key}`).addEventListener("click", () => {
+    const dot = row.querySelector(`#saveDot_${a.key}`);
+    updateDotButton(dot, `Salvación de ${a.name}`, state.saveProf[a.key], false);
+    dot.addEventListener("click", () => {
       cycleProf(state.saveProf, null, a.key, false);
       recalcAll();
     });
@@ -94,12 +108,14 @@ function renderSkills() {
     const row = document.createElement("div");
     row.className = "skill-row";
     row.innerHTML = `
-      <span class="${dotClass(state.skillProf[s.key], state.skillExpertise[s.key])}" id="skillDot_${s.key}"></span>
+      <button type="button" id="skillDot_${s.key}"></button>
       <span>${s.name} <span class="skill-ability">(${s.ability.toUpperCase()})</span></span>
       <span class="bonus" id="skillBonus_${s.key}">+0</span>
     `;
     box.appendChild(row);
-    row.querySelector(`#skillDot_${s.key}`).addEventListener("click", () => {
+    const dot = row.querySelector(`#skillDot_${s.key}`);
+    updateDotButton(dot, s.name, state.skillProf[s.key], state.skillExpertise[s.key]);
+    dot.addEventListener("click", () => {
       cycleProf(state.skillProf, state.skillExpertise, s.key, true);
       recalcAll();
     });
@@ -195,7 +211,7 @@ function recalcAll() {
     const saveBonus = m + (state.saveProf[a.key] ? pb : 0);
     byId(`saveBonus_${a.key}`).textContent = fmtMod(saveBonus);
     const dot = byId(`saveDot_${a.key}`);
-    if (dot) dot.className = dotClass(state.saveProf[a.key], false);
+    if (dot) updateDotButton(dot, `Salvación de ${a.name}`, state.saveProf[a.key], false);
   });
 
   SKILLS.forEach(s => {
@@ -205,7 +221,7 @@ function recalcAll() {
     else if (state.skillProf[s.key]) bonus += pb;
     byId(`skillBonus_${s.key}`).textContent = fmtMod(bonus);
     const dot = byId(`skillDot_${s.key}`);
-    if (dot) dot.className = dotClass(state.skillProf[s.key], state.skillExpertise[s.key]);
+    if (dot) updateDotButton(dot, s.name, state.skillProf[s.key], state.skillExpertise[s.key]);
   });
 
   const dexMod = mod(state.abilities.dex);
