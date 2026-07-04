@@ -252,6 +252,216 @@ computeAC():
   hoy confía en la buena fe del usuario. Si el backend va a ser autoritativo
   (multi-usuario, campañas compartidas), esto debe validarse server-side.
 
+### 1.7 Ampliación del dominio: subsistemas 2024 todavía no modelados
+
+> Esta sección incorpora hallazgos de una investigación externa (Gemini) sobre
+> mecánicas de combate/reglas 2024, **verificados** contra el conocimiento propio
+> y una búsqueda puntual antes de aceptarlos — no se copian a ciegas. Donde la
+> investigación se equivocaba, se corrige explícitamente abajo. Donde propone
+> más alcance del que un "character sheet" debería tener, se marca el límite.
+
+**Límite de alcance a defender explícitamente:** una hoja de personaje **registra
+y muestra** reglas; no **automatiza tiradas de dados ni turnos de combate**. Si la
+investigación externa sugiere que "el motor debe tirar dos dados y quedarse con
+el peor" o "interceptar la tirada de ataque", eso es trabajo de una mesa virtual
+(VTT) con iniciativa y turnos, no de este dominio. El límite que traza esta
+especificación: el estado registra *qué* condición/recurso está activo y *cuál es
+su efecto en texto de regla*; quien tira los dados (persona o VTT) aplica ese
+efecto. Mezclar ambos alcances es la forma más rápida de nunca terminar el backend.
+
+#### 1.7.1 Maestría de Armas (real, 2024)
+
+```ts
+type MasteryProperty = "cleave" | "graze" | "nick" | "push" | "sap" | "slow" | "topple" | "vex";
+
+// En el ítem (ver 1.2 Item.weapon):
+weapon.masteryProperty: MasteryProperty;
+
+// En el personaje: cuántos TIPOS de arma puede tener "dominados" a la vez —
+// el número sale de la tabla de progresión de la clase (Guerrero > otras marciales).
+character.masteredWeaponKeys: string[]; // p. ej. ["espada larga", "arco largo"]
+
+// Regla de activación (solo lectura/informativa, NO se ejecuta sola):
+// la propiedad de maestría de un arma solo "cuenta" si el personaje es competente
+// con ella Y su tipo está en masteredWeaponKeys.
+```
+
+| Propiedad | Efecto (texto de regla que la hoja debe mostrar, no ejecutar) |
+|---|---|
+| Cleave | Si impacta, puede atacar a una segunda criatura adyacente a la primera, sin sumar de nuevo el modificador de característica al daño |
+| Graze | Si falla, igual causa daño = modificador de característica |
+| Nick | El segundo ataque de un arma ligera puede hacerse dentro de la Acción de Atacar (no gasta Acción Adicional) |
+| Push | Si impacta, puede empujar al objetivo 3 m (si es Grande o menor) |
+| Sap | Si impacta, el objetivo tiene desventaja en su próxima tirada de ataque |
+| Slow | Si impacta, -3 m de velocidad al objetivo hasta el inicio de tu próximo turno (no acumulable) |
+| Topple | Si impacta, el objetivo tira salvación de Constitución o cae Derribado |
+| Vex | Si impacta, ventaja en tu próximo ataque contra ese mismo objetivo |
+
+#### 1.7.2 Condiciones activas
+
+```ts
+type ConditionKey = "blinded" | "charmed" | "deafened" | "exhaustion" | "frightened"
+  | "grappled" | "incapacitated" | "invisible" | "paralyzed" | "petrified"
+  | "poisoned" | "prone" | "restrained" | "stunned" | "unconscious";
+
+interface ActiveCondition { key: ConditionKey; source?: string; note?: string; }
+character.activeConditions: ActiveCondition[];
+```
+
+El texto de efecto de cada condición (p. ej. Paralizado: no puede actuar, falla
+salvaciones de Fuerza/Destreza, todo impacto a corta distancia es crítico
+automático) es **contenido de reglas estático** (candidato a `/rules/conditions`,
+igual que 1.3) — no lógica de personaje. La hoja marca "Paco está Envenenado" y
+muestra qué implica esa condición; no le aplica desventaja sola a una tirada que
+nadie pidió.
+
+#### 1.7.3 Cansancio (confirmado, cambio real de 2024 — reemplaza el sistema 1-6 con efectos variables de 2014)
+
+```
+character.exhaustionLevel: number;  // 0-6
+
+exhaustionD20Penalty(level) = level * 2   // resta de TODAS las tiradas de d20
+exhaustionSpeedPenalty(level) = level * 5 // en pies, resta de la velocidad
+exhaustionLevel >= 6  →  el personaje muere
+```
+
+#### 1.7.4 Carga y moneda — **corrección de un error real de la investigación externa**
+
+La investigación afirmaba que exceder la capacidad de carga fuerza la velocidad a
+un mínimo fijo, y calculaba la capacidad en **kilogramos**. Verificado: ambas cosas
+están mal.
+
+- La capacidad de carga (PHB 2024, glosario de reglas) es
+  `strScore * 15`, **en libras**, no en kilogramos (convertir para mostrar en kg
+  si la mesa lo prefiere, pero el cálculo fuente es en libras).
+- El PHB 2024 base **no** impone una penalización automática de velocidad al
+  exceder la capacidad — es simplemente un tope que el DM puede hacer cumplir. La
+  variante 2014 (Cargado/Muy Cargado, -3 m / -6 m de velocidad + desventaja) sigue
+  existiendo como regla **opcional**, no es el comportamiento por defecto de 2024.
+  → **Implementar el tramo de penalizaciones solo si se activa explícitamente
+  como variante**; el valor por defecto es solo el tope duro.
+
+```
+carryingCapacityLb(strScore) = strScore * 15
+
+// Variante opcional (flag: character.settings.useEncumbranceVariant):
+si peso > strScore * 10 → "muy cargado": velocidad -6m, desventaja en pruebas/
+  salvaciones/ataques de Fuerza, Destreza y Constitución
+si no si peso > strScore * 5 → "cargado": velocidad -3m
+```
+
+Moneda: guardar como un entero en **piezas de cobre** internamente (evita errores
+de coma flotante); convertir solo para mostrar (`1 pp = 1000 pc`, `1 gp = 100 pc`,
+`1 ep = 50 pc`, `1 sp = 10 pc`).
+
+#### 1.7.5 Economía de acciones (registro, no automatización de turnos)
+
+```ts
+interface TurnResources { actionUsed: boolean; bonusActionUsed: boolean; reactionUsed: boolean; }
+character.turn: TurnResources;
+// Un botón "Nuevo turno" reinicia los tres. La hoja NO intenta adivinar de quién
+// es el turno — eso lo decide la mesa/iniciativa, fuera de este dominio.
+```
+
+#### 1.7.6 Conjuros — metadatos y multiclase (expande 1.4/1.2)
+
+```ts
+interface SpellDefinition {  // contenido de reglas → candidato a /rules/spells
+  name: string; level: number; school: string; classes: string[];
+  castingTime: string; range: string;
+  components: { verbal: boolean; somatic: boolean; material: string | null; materialConsumed: boolean };
+  concentration: boolean; duration: string; description: string;
+}
+```
+
+Reglas de concentración (confirmado, sin cambios respecto a ediciones previas):
+
+```
+onCastSpell(spell):
+  si spell.concentration && character.concentration.active:
+    terminar la concentración anterior (purgar su efecto) antes de aplicar la nueva
+  character.concentration = spell.concentration ? { active: true, spellName: spell.name } : inactive
+
+onTakeDamage(amount):
+  si character.concentration.active:
+    dc = max(10, floor(amount / 2))
+    → solicitar salvación de Constitución con esa CD (la hoja la pide y registra
+      el resultado; no la resuelve sola — ver el límite de alcance de 1.7)
+```
+
+Multiclase (confirmado): el "nivel de lanzador efectivo" se agrega así —
+
+```
+effectiveCasterLevel =
+    Σ niveles en clases de lanzador completo (Bardo, Clérigo, Druida, Hechicero, Mago)
+  + floor(Σ niveles en Paladín/Explorador / 2)
+  + floor(Σ niveles en subclases de lanzador parcial (Caballero Arcano, Embaucador Arcano) / 3)
+```
+`effectiveCasterLevel` es la llave de una tabla de espacios por nivel (Tabla de
+Multiclase del PHB) — la tabla en sí es contenido de reglas (`/rules/`), no hace
+falta reproducirla aquí. La Magia de Pacto del Brujo **no** entra en esta suma:
+es una piscina aislada con su propia tabla, recarga en descanso **corto**, pero
+sus espacios sí pueden gastarse para lanzar conjuros conocidos de otras clases
+(la relación inversa no aplica).
+
+Confirmado como cambios reales de 2024 (afectan `CLASSES` en 1.3):
+- **Mago**: `spellsPrepared` sale de una tabla fija por nivel — ya **no** es
+  `Int mod + nivel` como en ediciones previas.
+- **Paladín y Explorador**: reciben espacios de conjuro desde **nivel 1** (antes
+  empezaban en nivel 2).
+
+#### 1.7.7 Golpe crítico (añade a 1.4)
+
+```
+onAttackRoll natural20:
+  ignora la CA del objetivo (impacto automático)
+  los dados de daño se duplican; los modificadores fijos NO se duplican
+condición "Paralizado" activa + atacante a <1.5 m → todo impacto es crítico automático
+```
+
+#### 1.7.8 Recursos de clase — un modelo genérico en vez de doce sistemas a medida
+
+La investigación externa propone controladores lógicos separados para Furia,
+Ki, Puntos de Hechicería, Canalizar Divinidad, Imponer las Manos, Dados de
+Superioridad, Inspiración Bárdica, etc. — doce subsistemas distintos. Es más
+sostenible modelar **un solo motor de recurso limitado**, parametrizado por
+tabla de clase, que doce implementaciones a medida:
+
+```ts
+interface ClassResource {
+  key: string;      // "rage" | "ki" | "sorceryPoints" | "channelDivinity" | "layOnHands" | ...
+  label: string;
+  max: number;      // = CLASSES[clase].resources[key].formula(level) — tabla de reglas, no código
+  current: number;
+  recharge: "shortRest" | "longRest" | "dawn";
+  unit: "uses" | "points" | "dice" | "pool";
+}
+character.classResources: ClassResource[];
+```
+
+`CLASSES[clave].resources` declara, por clase, qué recursos existen y su fórmula
+de máximo por nivel (dato, no lógica). El motor solo necesita **una** operación
+genérica de gastar/recargar; ejemplos de mapeo:
+
+| Clase | Recurso | Unidad | Recarga |
+|---|---|---|---|
+| Bárbaro | Furia | usos (tabla por nivel) | Descanso largo |
+| Monje | Ki | puntos = nivel de monje | Descanso corto |
+| Hechicero | Puntos de Hechicería | puntos = nivel | Descanso largo |
+| Clérigo | Canalizar Divinidad | usos (tabla) | Descanso corto |
+| Paladín | Imponer las Manos | reserva = nivel × 5 | Descanso largo |
+| Bardo | Inspiración Bárdica | dados (tabla + mod. Carisma usos) | Corto (nivel 5+) / largo |
+| Guerrero | Segundo Aliento / Acción Súbita / Dados de Superioridad | usos/dados distintos entre sí | Mixta por recurso |
+
+### 1.8 Sobre el manual de 80 MB
+
+No hace falta procesarlo completo: si algo de lo de arriba necesita verificarse
+contra el texto exacto del manual (p. ej. números finos de la tabla de Furia por
+nivel, o la tabla de espacios de conjuro multiclase), es más rápido pegar el
+fragmento de texto o la página puntual que compartir el archivo entero — 80 MB
+es casi con certeza un PDF escaneado/con imágenes, y de un documento así solo
+puedo leer rangos acotados de páginas a la vez.
+
 ---
 
 ## Parte 2 — Integración Frontend↔Backend
