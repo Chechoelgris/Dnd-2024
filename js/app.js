@@ -5,7 +5,7 @@ const state = {
   saveProf: {},   // { str: true, ... }
   skillProf: {},  // { acrobatics: true, ... }
   skillExpertise: {},
-  attacks: [{ name: "", bonus: "", damage: "" }],
+  attacks: [{ name: "", range: "", bonus: "", damage: "", notes: "" }],
   spellSlots: {}, // { 1: {total:0, used:0}, ... }
   spells: {},     // { 0: "text", 1: "text", ... }
 };
@@ -49,6 +49,25 @@ function renderAbilities() {
   });
 }
 
+function cycleProf(skillOrSaveState, expertiseState, key, allowExpertise) {
+  const prof = !!skillOrSaveState[key];
+  const exp = expertiseState ? !!expertiseState[key] : false;
+  if (!prof) {
+    skillOrSaveState[key] = true;
+  } else if (allowExpertise && !exp) {
+    expertiseState[key] = true;
+  } else {
+    skillOrSaveState[key] = false;
+    if (expertiseState) expertiseState[key] = false;
+  }
+}
+
+function dotClass(prof, exp) {
+  if (exp) return "dot expertise";
+  if (prof) return "dot prof";
+  return "dot";
+}
+
 function renderSaves() {
   const box = byId("savesBox");
   box.innerHTML = "";
@@ -56,13 +75,13 @@ function renderSaves() {
     const row = document.createElement("div");
     row.className = "save-row";
     row.innerHTML = `
-      <input type="checkbox" id="save_${a.key}">
+      <span class="${dotClass(state.saveProf[a.key], false)}" id="saveDot_${a.key}"></span>
       <span>${a.name}</span>
       <span class="bonus" id="saveBonus_${a.key}">+0</span>
     `;
     box.appendChild(row);
-    row.querySelector("input").addEventListener("change", e => {
-      state.saveProf[a.key] = e.target.checked;
+    row.querySelector(`#saveDot_${a.key}`).addEventListener("click", () => {
+      cycleProf(state.saveProf, null, a.key, false);
       recalcAll();
     });
   });
@@ -75,18 +94,13 @@ function renderSkills() {
     const row = document.createElement("div");
     row.className = "skill-row";
     row.innerHTML = `
-      <input type="checkbox" id="prof_${s.key}" title="Competente">
-      <input type="checkbox" id="exp_${s.key}" title="Experticia">
-      <span>${s.name} <small>(${s.ability.toUpperCase()})</small></span>
+      <span class="${dotClass(state.skillProf[s.key], state.skillExpertise[s.key])}" id="skillDot_${s.key}"></span>
+      <span>${s.name} <span class="skill-ability">(${s.ability.toUpperCase()})</span></span>
       <span class="bonus" id="skillBonus_${s.key}">+0</span>
     `;
     box.appendChild(row);
-    row.querySelector(`#prof_${s.key}`).addEventListener("change", e => {
-      state.skillProf[s.key] = e.target.checked;
-      recalcAll();
-    });
-    row.querySelector(`#exp_${s.key}`).addEventListener("change", e => {
-      state.skillExpertise[s.key] = e.target.checked;
+    row.querySelector(`#skillDot_${s.key}`).addEventListener("click", () => {
+      cycleProf(state.skillProf, state.skillExpertise, s.key, true);
       recalcAll();
     });
   });
@@ -99,10 +113,12 @@ function renderAttacks() {
   state.attacks.forEach((atk, i) => {
     const tr = document.createElement("tr");
     tr.innerHTML = `
-      <td><input type="text" value="${atk.name}" data-i="${i}" data-f="name"></td>
-      <td><input type="text" value="${atk.bonus}" data-i="${i}" data-f="bonus"></td>
-      <td><input type="text" value="${atk.damage}" data-i="${i}" data-f="damage"></td>
-      <td><button class="small-btn no-print" data-del="${i}">✕</button></td>
+      <td><input type="text" value="${atk.name || ""}" data-i="${i}" data-f="name"></td>
+      <td><input type="text" value="${atk.range || ""}" data-i="${i}" data-f="range"></td>
+      <td><input type="text" value="${atk.bonus || ""}" data-i="${i}" data-f="bonus"></td>
+      <td><input type="text" value="${atk.damage || ""}" data-i="${i}" data-f="damage"></td>
+      <td><input type="text" value="${atk.notes || ""}" data-i="${i}" data-f="notes"></td>
+      <td class="no-print"><button class="small-btn" data-del="${i}">✕</button></td>
     `;
     tbody.appendChild(tr);
   });
@@ -120,7 +136,7 @@ function renderAttacks() {
   });
 }
 byId("btnAddAttack").addEventListener("click", () => {
-  state.attacks.push({ name: "", bonus: "", damage: "" });
+  state.attacks.push({ name: "", range: "", bonus: "", damage: "", notes: "" });
   renderAttacks();
 });
 
@@ -178,7 +194,8 @@ function recalcAll() {
     byId(`mod_${a.key}`).textContent = fmtMod(m);
     const saveBonus = m + (state.saveProf[a.key] ? pb : 0);
     byId(`saveBonus_${a.key}`).textContent = fmtMod(saveBonus);
-    byId(`save_${a.key}`).checked = !!state.saveProf[a.key];
+    const dot = byId(`saveDot_${a.key}`);
+    if (dot) dot.className = dotClass(state.saveProf[a.key], false);
   });
 
   SKILLS.forEach(s => {
@@ -187,17 +204,19 @@ function recalcAll() {
     if (state.skillExpertise[s.key]) bonus += pb * 2;
     else if (state.skillProf[s.key]) bonus += pb;
     byId(`skillBonus_${s.key}`).textContent = fmtMod(bonus);
-    byId(`prof_${s.key}`).checked = !!state.skillProf[s.key];
-    byId(`exp_${s.key}`).checked = !!state.skillExpertise[s.key];
+    const dot = byId(`skillDot_${s.key}`);
+    if (dot) dot.className = dotClass(state.skillProf[s.key], state.skillExpertise[s.key]);
   });
 
   const dexMod = mod(state.abilities.dex);
   byId("initiative").textContent = fmtMod(dexMod);
 
   const wisMod = mod(state.abilities.wis);
-  const perceptionBonus = wisMod
-    + (state.skillExpertise.perception ? pb * 2 : (state.skillProf.perception ? pb : 0));
-  byId("passivePerception").textContent = 10 + perceptionBonus;
+  const intMod = mod(state.abilities.int);
+  const bonusFor = key => (state.skillExpertise[key] ? pb * 2 : (state.skillProf[key] ? pb : 0));
+  byId("passivePerception").textContent = 10 + wisMod + bonusFor("perception");
+  byId("passiveInvestigation").textContent = 10 + intMod + bonusFor("investigation");
+  byId("passiveInsight").textContent = 10 + wisMod + bonusFor("insight");
 
   // Conjuros
   const classKey = byId("charClass").value;
@@ -213,6 +232,23 @@ function recalcAll() {
     byId("spellSaveDC").textContent = "—";
     byId("spellAttackBonus").textContent = "—";
   }
+
+  updatePrintHeader();
+}
+
+function updatePrintHeader() {
+  const name = byId("charName").value || "Personaje sin nombre";
+  const cls = CLASSES.find(c => c.key === byId("charClass").value);
+  const sp = SPECIES.find(s => s.key === byId("charSpecies").value);
+  const bg = BACKGROUNDS.find(b => b.key === byId("charBackground").value);
+  const level = byId("charLevel").value || 1;
+  byId("printName").textContent = name;
+  byId("printSubtitle").textContent = [
+    sp ? sp.name : null,
+    cls ? `${cls.name} ${level}` : null,
+    bg ? bg.name : null,
+    byId("charAlignment").value || null,
+  ].filter(Boolean).join(" · ");
 }
 
 // ---------- Info de referencia (clase/especie/trasfondo) ----------
@@ -241,7 +277,6 @@ function applyDefaults() {
     byId("originFeatDesc").value = ORIGIN_FEATS.find(f => bg.feat.startsWith(f.name))?.summary || "";
     byId("otherProficiencies").value = [byId("otherProficiencies").value, bg.tool].filter(Boolean).join("\n");
     byId("equipment").value = [byId("equipment").value, bg.equipment].filter(Boolean).join("\n");
-    // Sugerencia de incremento de característica +2/+1 en las 3 habilitadas por el trasfondo.
     const [a, b2] = bg.abilities;
     state.abilities[a] = (state.abilities[a] || 10) + 2;
     state.abilities[b2] = (state.abilities[b2] || 10) + 1;
@@ -251,20 +286,69 @@ function applyDefaults() {
     byId("speed").value = sp.speed;
     byId("featuresTraits").value = [byId("featuresTraits").value, `${sp.name}: ${sp.traits}`].filter(Boolean).join("\n\n");
   }
+  renderSaves();
+  renderSkills();
   recalcAll();
 }
 
+// ---------- Descansos ----------
+byId("btnLongRest").addEventListener("click", () => {
+  if (!confirm("¿Realizar un Descanso Largo? Esto restaura los PG al máximo, quita PG temporales, reinicia espacios de conjuro y salvaciones de muerte.")) return;
+  byId("hpCurrent").value = byId("hpMax").value || 0;
+  byId("hpTemp").value = 0;
+  Object.keys(state.spellSlots).forEach(lvl => { state.spellSlots[lvl].used = 0; });
+  renderSpellSlots();
+  ["ds_s1", "ds_s2", "ds_s3", "ds_f1", "ds_f2", "ds_f3"].forEach(id => { byId(id).checked = false; });
+  recalcAll();
+});
+byId("btnShortRest").addEventListener("click", () => {
+  if (!confirm("¿Realizar un Descanso Corto? Puedes gastar Dados de Golpe para recuperar PG manualmente.")) return;
+  alert("Descanso corto registrado. Ajusta manualmente los PG si gastas Dados de Golpe (y los espacios de Pacto si eres Brujo).");
+});
+byId("btnHeal").addEventListener("click", () => {
+  const amount = Number(prompt("¿Cuántos PG curar?", "0")) || 0;
+  const max = Number(byId("hpMax").value) || 0;
+  byId("hpCurrent").value = Math.min(max, (Number(byId("hpCurrent").value) || 0) + amount);
+});
+byId("btnDamage").addEventListener("click", () => {
+  const amount = Number(prompt("¿Cuánto daño recibir?", "0")) || 0;
+  let temp = Number(byId("hpTemp").value) || 0;
+  let current = Number(byId("hpCurrent").value) || 0;
+  let remaining = amount;
+  if (temp > 0) {
+    const absorbed = Math.min(temp, remaining);
+    temp -= absorbed;
+    remaining -= absorbed;
+  }
+  current = Math.max(0, current - remaining);
+  byId("hpTemp").value = temp;
+  byId("hpCurrent").value = current;
+});
+
+// ---------- Pestañas ----------
+document.querySelectorAll(".tab-btn").forEach(btn => {
+  btn.addEventListener("click", () => {
+    document.querySelectorAll(".tab-btn").forEach(b => b.classList.remove("active"));
+    document.querySelectorAll(".tab-panel").forEach(p => p.classList.remove("active"));
+    btn.classList.add("active");
+    document.querySelector(`.tab-panel[data-panel="${btn.dataset.tab}"]`).classList.add("active");
+  });
+});
+
 // ---------- Guardar / Cargar ----------
+const TEXT_FIELD_IDS = [
+  "charName", "charClass", "charLevel", "charBackground", "charSpecies", "charAlignment", "charXP", "playerName",
+  "ac", "speed", "hpMax", "hpCurrent", "hpTemp", "hitDice", "equipment", "treasure",
+  "personalityTraits", "ideals", "bonds", "flaws", "originFeat", "originFeatDesc", "featuresTraits", "otherProficiencies",
+  "age", "height", "weight", "eyes", "skin", "hair", "alliesOrgs", "backstory", "spellClass",
+  "defenses", "conditions", "senses", "notes",
+];
+const CHECKBOX_IDS = ["inspiration", "ds_s1", "ds_s2", "ds_s3", "ds_f1", "ds_f2", "ds_f3"];
+
 function collectFormValues() {
-  const ids = [
-    "charName", "charClass", "charLevel", "charBackground", "charSpecies", "charAlignment", "charXP", "playerName",
-    "ac", "speed", "hpMax", "hpCurrent", "hpTemp", "hitDice", "equipment",
-    "personalityTraits", "ideals", "bonds", "flaws", "originFeat", "originFeatDesc", "featuresTraits", "otherProficiencies",
-    "age", "height", "weight", "eyes", "skin", "hair", "alliesOrgs", "backstory", "treasure", "spellClass",
-  ];
   const values = {};
-  ids.forEach(id => { const el = byId(id); if (el) values[id] = el.value; });
-  values.inspiration = byId("inspiration").checked;
+  TEXT_FIELD_IDS.forEach(id => { const el = byId(id); if (el) values[id] = el.value; });
+  CHECKBOX_IDS.forEach(id => { const el = byId(id); if (el) values[id] = el.checked; });
   return values;
 }
 
@@ -296,10 +380,12 @@ function loadFullState(data) {
   state.saveProf = data.saveProf || {};
   state.skillProf = data.skillProf || {};
   state.skillExpertise = data.skillExpertise || {};
-  state.attacks = data.attacks && data.attacks.length ? data.attacks : [{ name: "", bonus: "", damage: "" }];
+  state.attacks = data.attacks && data.attacks.length ? data.attacks : [{ name: "", range: "", bonus: "", damage: "", notes: "" }];
   state.spellSlots = data.spellSlots || {};
   state.spells = data.spells || {};
   renderAbilities();
+  renderSaves();
+  renderSkills();
   renderAttacks();
   renderSpellSlots();
   renderSpellLevels();
@@ -350,10 +436,11 @@ byId("btnPrint").addEventListener("click", () => window.print());
 byId("btnApplyDefaults").addEventListener("click", applyDefaults);
 
 // ---------- Listeners generales ----------
-["charClass", "charSpecies", "charBackground", "charLevel"].forEach(id => {
+["charClass", "charSpecies", "charBackground", "charLevel", "charName", "charAlignment"].forEach(id => {
   byId(id).addEventListener("change", () => { renderReferenceInfo(); recalcAll(); });
 });
 byId("charLevel").addEventListener("input", recalcAll);
+byId("charName").addEventListener("input", updatePrintHeader);
 
 // ---------- Inicialización ----------
 function init() {
