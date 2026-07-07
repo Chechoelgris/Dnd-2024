@@ -20,6 +20,7 @@
         <select id="charSpecies"></select>
         <select id="charClass"></select>
         <input type="number" id="charLevel" min="1" max="20" value="1" class="tiny" title="Nivel">
+        <button type="button" id="btnLevelUp" class="levelup-btn no-print" title="Subir de nivel">▲ Subir nivel</button>
         <span class="identity-sep">·</span>
         <select id="charBackground"></select>
         <span class="identity-sep">·</span>
@@ -30,16 +31,21 @@
   <div class="header-actions">
     <button id="btnShortRest" class="rest-btn">☾ Descanso Corto</button>
     <button id="btnLongRest" class="rest-btn">☀ Descanso Largo</button>
-    <div class="menu-actions">
-      <button id="btnLoadRogue" title="Cargar ejemplo: Pícaro">🗡️</button>
-      <button id="btnLoadPaladin" title="Cargar ejemplo: Paladín">🛡️</button>
-      <button id="btnSave" title="Guardar">💾</button>
-      <button id="btnLoad" title="Cargar">📂</button>
-      <button id="btnExport" title="Exportar JSON">⬇️</button>
-      <label class="file-btn" title="Importar JSON">⬆️<input type="file" id="btnImport" accept="application/json" hidden></label>
-      <button id="btnReset" title="Nuevo personaje">♻️</button>
-      <button id="btnPrint" title="Imprimir">🖨️</button>
-    </div>
+    <details class="menu" id="mainMenu">
+      <summary aria-label="Menú de la hoja">☰ Menú</summary>
+      <div class="menu-panel">
+        <button id="btnSave">💾 Guardar</button>
+        <button id="btnLoad">📂 Cargar guardado</button>
+        <button id="btnExport">⬇️ Exportar JSON</button>
+        <label class="menu-item-file">⬆️ Importar JSON<input type="file" id="btnImport" accept="application/json" hidden></label>
+        <hr>
+        <button id="btnLoadRogue">🗡️ Cargar Pícaro de ejemplo</button>
+        <button id="btnLoadPaladin">🛡️ Cargar Paladín de ejemplo</button>
+        <hr>
+        <button id="btnPrint">🖨️ Imprimir</button>
+        <button id="btnReset">♻️ Nuevo personaje</button>
+      </div>
+    </details>
   </div>
 </header>
 
@@ -269,7 +275,16 @@
             </div>
           </div>
           <div id="spellSlotsBox" class="spell-slots"></div>
-          <div id="spellLevelsBox" class="spell-levels"></div>
+          <div class="add-item-row no-print">
+            <select id="spellPicker"></select>
+            <label class="filter-check"><input type="checkbox" id="spellFilterClass" checked> Solo mi clase</label>
+            <button id="btnAddSpell" class="small-btn">+ Añadir conjuro</button>
+          </div>
+          <div id="spellsKnownBox"></div>
+          <div class="field">
+            <label>Notas de conjuros</label>
+            <textarea id="spellNotes" rows="3" placeholder="Anotaciones libres (no reemplaza al catálogo)"></textarea>
+          </div>
         </div>
 
         <div class="card">

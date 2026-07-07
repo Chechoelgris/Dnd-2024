@@ -211,6 +211,14 @@ const SAMPLE_CHARACTERS = {
     classSkillChoices: ["athletics", "medicine"],
     hp: { max: 44, current: 44, temp: 0 },
     spellSlots: { 1: { total: 4, used: 0 }, 2: { total: 2, used: 0 } },
+    spellsKnown: [
+      { key: "bless", prepared: true },
+      { key: "cureWounds", prepared: true },
+      { key: "divineFavor", prepared: true },
+      { key: "shieldOfFaith", prepared: false },
+      { key: "aid", prepared: true },
+      { key: "lesserRestoration", prepared: false },
+    ],
     inventory: [
       { name: "Cota de malla", category: "armor", armor: { type: "heavy", baseAC: 16, maxDex: 0, strMin: 13 }, equipped: true },
       { name: "Escudo", category: "shield", shieldBonus: 2, equipped: true },
@@ -232,3 +240,101 @@ const SAMPLE_CHARACTERS = {
     otherProficiencies: "Set de juego (Noble)\nIdiomas: Común, Dracónico",
   },
 };
+
+// ---------------------------------------------------------------------
+// Catálogo de conjuros (subconjunto SRD 5.2, resumido/parafraseado).
+// Regla del proyecto: los conjuros de un personaje se ELIGEN de este
+// catálogo (datos estructurados), nunca se escriben como texto libre.
+// ---------------------------------------------------------------------
+const SPELL_CATALOG = [
+  // Trucos (nivel 0)
+  { key: "sacredFlame", name: "Llama Sagrada", level: 0, school: "Evocación", classes: ["cleric"], castingTime: "Acción", range: "18 m", concentration: false, summary: "Salvación Des o 1d8 radiante (escala por nivel); ignora cobertura." },
+  { key: "fireBolt", name: "Rayo de Fuego", level: 0, school: "Evocación", classes: ["sorcerer", "wizard"], castingTime: "Acción", range: "36 m", concentration: false, summary: "Ataque de conjuro; 1d10 fuego (escala por nivel)." },
+  { key: "rayOfFrost", name: "Rayo de Escarcha", level: 0, school: "Evocación", classes: ["sorcerer", "wizard"], castingTime: "Acción", range: "18 m", concentration: false, summary: "Ataque; 1d8 frío y -3 m de velocidad." },
+  { key: "light", name: "Luz", level: 0, school: "Evocación", classes: ["bard", "cleric", "sorcerer", "wizard"], castingTime: "Acción", range: "Toque", concentration: false, summary: "Un objeto emite luz brillante 6 m." },
+  { key: "mageHand", name: "Mano de Mago", level: 0, school: "Conjuración", classes: ["bard", "sorcerer", "warlock", "wizard"], castingTime: "Acción", range: "9 m", concentration: false, summary: "Mano espectral que manipula objetos a distancia." },
+  { key: "prestidigitation", name: "Prestidigitación", level: 0, school: "Transmutación", classes: ["bard", "sorcerer", "warlock", "wizard"], castingTime: "Acción", range: "3 m", concentration: false, summary: "Pequeños efectos mágicos menores." },
+  { key: "guidance", name: "Guía", level: 0, school: "Adivinación", classes: ["cleric", "druid"], castingTime: "Acción", range: "Toque", concentration: true, summary: "+1d4 a una prueba de característica del objetivo." },
+  { key: "thaumaturgy", name: "Taumaturgia", level: 0, school: "Transmutación", classes: ["cleric"], castingTime: "Acción", range: "9 m", concentration: false, summary: "Manifestaciones menores de poder divino." },
+  { key: "eldritchBlast", name: "Explosión Sobrenatural", level: 0, school: "Evocación", classes: ["warlock"], castingTime: "Acción", range: "36 m", concentration: false, summary: "Ataque; 1d10 de fuerza (rayos adicionales por nivel)." },
+  { key: "viciousMockery", name: "Burla Dañina", level: 0, school: "Encantamiento", classes: ["bard"], castingTime: "Acción", range: "18 m", concentration: false, summary: "Salvación Sab o 1d6 psíquico y desventaja en su próximo ataque." },
+  // Nivel 1
+  { key: "bless", name: "Bendición", level: 1, school: "Encantamiento", classes: ["cleric", "paladin"], castingTime: "Acción", range: "9 m", concentration: true, summary: "Hasta 3 criaturas suman 1d4 a ataques y salvaciones." },
+  { key: "cureWounds", name: "Curar Heridas", level: 1, school: "Abjuración", classes: ["bard", "cleric", "druid", "paladin", "ranger"], castingTime: "Acción", range: "Toque", concentration: false, summary: "Cura 2d8 + mod. de conjuro (2024: dado aumentado)." },
+  { key: "healingWord", name: "Palabra de Curación", level: 1, school: "Abjuración", classes: ["bard", "cleric", "druid"], castingTime: "Acción adicional", range: "18 m", concentration: false, summary: "Cura 2d4 + mod. a distancia." },
+  { key: "shield", name: "Escudo", level: 1, school: "Abjuración", classes: ["sorcerer", "wizard"], castingTime: "Reacción", range: "Personal", concentration: false, summary: "+5 CA hasta tu próximo turno." },
+  { key: "mageArmor", name: "Armadura de Mago", level: 1, school: "Abjuración", classes: ["sorcerer", "wizard"], castingTime: "Acción", range: "Toque", concentration: false, summary: "CA base 13 + Des durante 8 horas." },
+  { key: "magicMissile", name: "Proyectil Mágico", level: 1, school: "Evocación", classes: ["sorcerer", "wizard"], castingTime: "Acción", range: "36 m", concentration: false, summary: "3 dardos de 1d4+1 de fuerza, impacto automático." },
+  { key: "burningHands", name: "Manos Ardientes", level: 1, school: "Evocación", classes: ["sorcerer", "wizard"], castingTime: "Acción", range: "Cono 4.5 m", concentration: false, summary: "Salvación Des; 3d6 fuego." },
+  { key: "divineFavor", name: "Favor Divino", level: 1, school: "Transmutación", classes: ["paladin"], castingTime: "Acción adicional", range: "Personal", concentration: true, summary: "Tus armas hacen +1d4 radiante." },
+  { key: "shieldOfFaith", name: "Escudo de la Fe", level: 1, school: "Abjuración", classes: ["cleric", "paladin"], castingTime: "Acción adicional", range: "18 m", concentration: true, summary: "+2 CA a una criatura." },
+  { key: "huntersMark", name: "Marca del Cazador", level: 1, school: "Adivinación", classes: ["ranger"], castingTime: "Acción adicional", range: "27 m", concentration: true, summary: "+1d6 al daño de tus armas contra el objetivo marcado." },
+  { key: "hexSpell", name: "Maleficio", level: 1, school: "Encantamiento", classes: ["warlock"], castingTime: "Acción adicional", range: "27 m", concentration: true, summary: "+1d6 necrótico a tus ataques contra el objetivo; desventaja en una característica." },
+  { key: "detectMagic", name: "Detectar Magia", level: 1, school: "Adivinación", classes: ["bard", "cleric", "druid", "paladin", "ranger", "sorcerer", "wizard"], castingTime: "Acción (ritual)", range: "Personal", concentration: true, summary: "Percibes magia a 9 m." },
+  { key: "sleepSpell", name: "Dormir", level: 1, school: "Encantamiento", classes: ["bard", "sorcerer", "wizard"], castingTime: "Acción", range: "27 m", concentration: true, summary: "2024: salvación Sab o Incapacitado; repite al final de cada turno." },
+  // Nivel 2
+  { key: "invisibility", name: "Invisibilidad", level: 2, school: "Ilusión", classes: ["bard", "sorcerer", "warlock", "wizard"], castingTime: "Acción", range: "Toque", concentration: true, summary: "Una criatura es Invisible hasta 1 hora o hasta que ataque/conjure." },
+  { key: "mirrorImage", name: "Imagen Espejo", level: 2, school: "Ilusión", classes: ["sorcerer", "warlock", "wizard"], castingTime: "Acción", range: "Personal", concentration: false, summary: "3 duplicados ilusorios desvían ataques." },
+  { key: "mistyStep", name: "Paso Brumoso", level: 2, school: "Conjuración", classes: ["sorcerer", "warlock", "wizard"], castingTime: "Acción adicional", range: "Personal", concentration: false, summary: "Teletransporte de 9 m." },
+  { key: "lesserRestoration", name: "Restablecimiento Menor", level: 2, school: "Abjuración", classes: ["bard", "cleric", "druid", "paladin", "ranger"], castingTime: "Acción adicional (2024)", range: "Toque", concentration: false, summary: "Termina una enfermedad o condición (cegado, ensordecido, paralizado, envenenado)." },
+  { key: "aid", name: "Ayuda", level: 2, school: "Abjuración", classes: ["cleric", "paladin"], castingTime: "Acción", range: "9 m", concentration: false, summary: "+5 PG máximos y actuales a 3 criaturas por 8 horas." },
+  { key: "holdPerson", name: "Inmovilizar Persona", level: 2, school: "Encantamiento", classes: ["bard", "cleric", "druid", "sorcerer", "warlock", "wizard"], castingTime: "Acción", range: "18 m", concentration: true, summary: "Humanoide Paralizado (salvación Sab repetida)." },
+  { key: "scorchingRay", name: "Rayo Abrasador", level: 2, school: "Evocación", classes: ["sorcerer", "wizard"], castingTime: "Acción", range: "36 m", concentration: false, summary: "3 rayos de ataque, 2d6 fuego cada uno." },
+  { key: "spiritualWeapon", name: "Arma Espiritual", level: 2, school: "Evocación", classes: ["cleric"], castingTime: "Acción adicional", range: "18 m", concentration: true, summary: "2024: ahora requiere concentración; arma espectral que ataca 1d8+mod." },
+  // Nivel 3
+  { key: "fireball", name: "Bola de Fuego", level: 3, school: "Evocación", classes: ["sorcerer", "wizard"], castingTime: "Acción", range: "45 m", concentration: false, summary: "Salvación Des; 8d6 fuego en radio de 6 m." },
+  { key: "counterspell", name: "Contraconjuro", level: 3, school: "Abjuración", classes: ["sorcerer", "warlock", "wizard"], castingTime: "Reacción", range: "18 m", concentration: false, summary: "2024: el objetivo hace salvación Con o su conjuro falla." },
+  { key: "flySpell", name: "Volar", level: 3, school: "Transmutación", classes: ["sorcerer", "warlock", "wizard"], castingTime: "Acción", range: "Toque", concentration: true, summary: "Velocidad de vuelo 18 m por 10 minutos." },
+  { key: "dispelMagic", name: "Disipar Magia", level: 3, school: "Abjuración", classes: ["bard", "cleric", "druid", "paladin", "sorcerer", "warlock", "wizard"], castingTime: "Acción", range: "36 m", concentration: false, summary: "Termina conjuros de nivel 3 o menor sobre el objetivo." },
+  { key: "revivify", name: "Revivificar", level: 3, school: "Nigromancia", classes: ["cleric", "druid", "paladin", "ranger"], castingTime: "Acción", range: "Toque", concentration: false, summary: "Devuelve a la vida a una criatura muerta hace <1 minuto con 1 PG." },
+  { key: "auraOfVitality", name: "Aura de Vitalidad", level: 3, school: "Abjuración", classes: ["cleric", "druid", "paladin"], castingTime: "Acción", range: "Personal", concentration: true, summary: "Aura de 9 m; cura 2d6 con acción adicional cada turno." },
+  // Nivel 4+
+  { key: "dimensionDoor", name: "Puerta Dimensional", level: 4, school: "Conjuración", classes: ["bard", "sorcerer", "warlock", "wizard"], castingTime: "Acción", range: "150 m", concentration: false, summary: "Teletransporte contigo y una criatura voluntaria." },
+  { key: "fireShield", name: "Escudo de Fuego", level: 4, school: "Evocación", classes: ["druid", "sorcerer", "wizard"], castingTime: "Acción", range: "Personal", concentration: false, summary: "Resistencia a fuego o frío; daña a atacantes cuerpo a cuerpo." },
+  { key: "coneOfCold", name: "Cono de Frío", level: 5, school: "Evocación", classes: ["druid", "sorcerer", "wizard"], castingTime: "Acción", range: "Cono 18 m", concentration: false, summary: "Salvación Con; 8d8 frío." },
+  { key: "massCureWounds", name: "Curar Heridas en Masa", level: 5, school: "Abjuración", classes: ["bard", "cleric", "druid"], castingTime: "Acción", range: "18 m", concentration: false, summary: "Cura 5d8 + mod. a 6 criaturas." },
+  { key: "disintegrate", name: "Desintegrar", level: 6, school: "Transmutación", classes: ["sorcerer", "wizard"], castingTime: "Acción", range: "18 m", concentration: false, summary: "Salvación Des; 10d6+40 de fuerza; a 0 PG el objetivo se convierte en polvo." },
+  { key: "fingerOfDeath", name: "Dedo de la Muerte", level: 7, school: "Nigromancia", classes: ["sorcerer", "warlock", "wizard"], castingTime: "Acción", range: "18 m", concentration: false, summary: "Salvación Con; 7d8+30 necrótico." },
+  { key: "powerWordStun", name: "Palabra de Poder: Aturdir", level: 8, school: "Encantamiento", classes: ["bard", "sorcerer", "warlock", "wizard"], castingTime: "Acción", range: "18 m", concentration: false, summary: "Aturde a una criatura con 150 PG o menos." },
+  { key: "wish", name: "Deseo", level: 9, school: "Conjuración", classes: ["sorcerer", "wizard"], castingTime: "Acción", range: "Personal", concentration: false, summary: "Duplica cualquier conjuro de nivel 8 o menor, o altera la realidad." },
+];
+
+// ---------------------------------------------------------------------
+// Progresión de espacios de conjuro por nivel de clase (PHB 2024).
+// Índice = nivel de personaje (1-20); cada entrada = espacios por nivel
+// de conjuro 1..9. En 2024 Paladín/Explorador lanzan desde nivel 1.
+// ---------------------------------------------------------------------
+const FULL_CASTER_SLOTS = {
+  1: [2], 2: [3], 3: [4, 2], 4: [4, 3], 5: [4, 3, 2], 6: [4, 3, 3],
+  7: [4, 3, 3, 1], 8: [4, 3, 3, 2], 9: [4, 3, 3, 3, 1], 10: [4, 3, 3, 3, 2],
+  11: [4, 3, 3, 3, 2, 1], 12: [4, 3, 3, 3, 2, 1], 13: [4, 3, 3, 3, 2, 1, 1],
+  14: [4, 3, 3, 3, 2, 1, 1], 15: [4, 3, 3, 3, 2, 1, 1, 1], 16: [4, 3, 3, 3, 2, 1, 1, 1],
+  17: [4, 3, 3, 3, 2, 1, 1, 1, 1], 18: [4, 3, 3, 3, 3, 1, 1, 1, 1],
+  19: [4, 3, 3, 3, 3, 2, 1, 1, 1], 20: [4, 3, 3, 3, 3, 2, 2, 1, 1],
+};
+const HALF_CASTER_SLOTS = {
+  1: [2], 2: [2], 3: [3], 4: [3], 5: [4, 2], 6: [4, 2], 7: [4, 3], 8: [4, 3],
+  9: [4, 3, 2], 10: [4, 3, 2], 11: [4, 3, 3], 12: [4, 3, 3], 13: [4, 3, 3, 1],
+  14: [4, 3, 3, 1], 15: [4, 3, 3, 2], 16: [4, 3, 3, 2], 17: [4, 3, 3, 3, 1],
+  18: [4, 3, 3, 3, 1], 19: [4, 3, 3, 3, 2], 20: [4, 3, 3, 3, 2],
+};
+// Brujo: Magia de Pacto — pocos espacios, todos del mismo nivel, recarga corta.
+const PACT_MAGIC_SLOTS = {
+  1: { count: 1, level: 1 }, 2: { count: 2, level: 1 }, 3: { count: 2, level: 2 },
+  4: { count: 2, level: 2 }, 5: { count: 2, level: 3 }, 6: { count: 2, level: 3 },
+  7: { count: 2, level: 4 }, 8: { count: 2, level: 4 }, 9: { count: 2, level: 5 },
+  10: { count: 2, level: 5 }, 11: { count: 3, level: 5 }, 12: { count: 3, level: 5 },
+  13: { count: 3, level: 5 }, 14: { count: 3, level: 5 }, 15: { count: 3, level: 5 },
+  16: { count: 3, level: 5 }, 17: { count: 4, level: 5 }, 18: { count: 4, level: 5 },
+  19: { count: 4, level: 5 }, 20: { count: 4, level: 5 },
+};
+
+const CASTER_TYPE = {
+  bard: "full", cleric: "full", druid: "full", sorcerer: "full", wizard: "full",
+  paladin: "half", ranger: "half", warlock: "pact",
+  barbarian: null, fighter: null, monk: null, rogue: null,
+};
+
+// Hitos de progresión que la subida de nivel debe recordar al jugador.
+const ASI_LEVELS = [4, 8, 12, 16, 19];
+const SUBCLASS_LEVEL = 3;

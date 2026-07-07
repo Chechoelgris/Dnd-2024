@@ -453,7 +453,55 @@ genérica de gastar/recargar; ejemplos de mapeo:
 | Bardo | Inspiración Bárdica | dados (tabla + mod. Carisma usos) | Corto (nivel 5+) / largo |
 | Guerrero | Segundo Aliento / Acción Súbita / Dados de Superioridad | usos/dados distintos entre sí | Mixta por recurso |
 
-### 1.8 Sobre el manual de 80 MB
+### 1.8 Principio "catálogo primero" (decisión de proyecto, ya aplicada en el frontend)
+
+**Ninguna entidad de juego se guarda como texto libre si existe como concepto de
+reglas.** Conjuros, armas, armaduras, objetos, clases, especies, trasfondos,
+condiciones y dotes se **eligen de un catálogo** con clave estable (`key`), y el
+personaje guarda solo referencias + estado propio (equipado/preparado/usos).
+Motivo: el texto libre no se puede consultar, validar, migrar ni compartir — "se
+llena de mierda la BBDD". El texto libre queda reservado para lo genuinamente
+narrativo (backstory, notas, descripciones personales).
+
+Estado actual del frontend de referencia:
+- **Conjuros**: `spellsKnown: [{ key, prepared }]` contra `SPELL_CATALOG`
+  (~45 conjuros SRD estructurados con escuela, tiempo de casteo, alcance,
+  concentración y resumen). Con "Notas de conjuros" como excepción narrativa.
+- **Armas equipadas → ataques calculados**: cada arma equipada genera su fila de
+  ataque automáticamente (bonif. = mod. de característica [Sutil usa el mejor de
+  Fue/Des] + competencia; daño = dado del arma + mod.). Las filas manuales quedan
+  solo para lo que el catálogo aún no modela (p. ej. aliento de dracónido).
+- **Pendiente de catalogar**: dotes (hoy texto), rasgos de clase/especie (hoy
+  texto), condiciones (hoy texto). Son los siguientes candidatos.
+
+### 1.9 Subida de nivel (transición de estado guiada)
+
+`levelUp()` es una transición atómica sobre el personaje — no "editar el número
+de nivel a mano":
+
+```
+levelUp():
+  requiere clase elegida y nivel < 20
+  1. PG: promedio del dado de golpe (floor(hitDie/2)+1) o la tirada real que
+     haga el jugador (validada 1..hitDie), + mod. de Constitución (mínimo 1
+     total). Suma a hp.max y hp.current.
+  2. level += 1
+  3. Espacios de conjuro: se reescriben desde la tabla de progresión de la
+     clase (FULL_CASTER_SLOTS / HALF_CASTER_SLOTS / PACT_MAGIC_SLOTS según
+     CASTER_TYPE). `used` se recorta si excede el nuevo total.
+  4. Hitos que se COMUNICAN pero no se automatizan todavía:
+     - nivel 3 → elección de subclase
+     - niveles 4/8/12/16/19 → Mejora de Característica o dote
+     - subida de bonificador de competencia (5/9/13/17)
+```
+
+Tablas añadidas como contenido de reglas (candidatas a `/rules/`):
+`FULL_CASTER_SLOTS`, `HALF_CASTER_SLOTS` (Paladín/Explorador, desde nivel 1 en
+2024), `PACT_MAGIC_SLOTS` (Brujo, aislada), `CASTER_TYPE`, `ASI_LEVELS`,
+`SUBCLASS_LEVEL`. Extensión futura: que el paso 4 abra flujos de elección reales
+(subclase de catálogo, editor de ASI/dote) en vez de solo avisar.
+
+### 1.10 Sobre el manual de 80 MB
 
 No hace falta procesarlo completo: si algo de lo de arriba necesita verificarse
 contra el texto exacto del manual (p. ej. números finos de la tabla de Furia por
@@ -484,18 +532,34 @@ D&D, no un CRUD — no se puede depender de estar en línea. Propuesta:
 
 ### 2.2 Entidades de backend
 
+**Dos scopes de persistencia, cada uno para lo que es bueno** (decisión de
+proyecto: conviven un scope relacional y uno documental):
+
 ```
-User            — cuenta (auth)
-Character       — pertenece a un User; payload = el esquema de la Parte 1.2
-                  Recomendado: normalizar identity/level/hp (para listar/filtrar
-                  personajes) + guardar el resto (inventory, spells, notas...)
-                  como JSON — el esquema es demasiado fluido (homebrew, campos
-                  de texto libre) para normalizar todo a tablas relacionales.
-Campaign        — opcional; agrupa personajes bajo un DM
-CampaignMember  — User + Campaign + rol ("dm" | "player")
-RuleContent     — opcional: CLASSES/SPECIES/BACKGROUNDS/ITEM_CATALOG/etc. movidos
-                  del frontend a datos servidos, para permitir homebrew sin deploy
+SCOPE RELACIONAL (esquema estable, integridad referencial, se consulta/filtra):
+  User             — cuenta (auth)
+  Campaign         — agrupa personajes bajo un DM
+  CampaignMember   — User + Campaign + rol ("dm" | "player")
+  Party            — subgrupo de personajes dentro de una campaña (futuro)
+  CharacterIndex   — fila liviana por personaje: dueño, nombre, clase, nivel,
+                     campaña; lo que se lista/filtra/ordena sin abrir el payload
+  ── Catálogos (el "contenido de reglas" de 1.3/1.7/1.8, con key estable):
+  Spell, Item (armas/armaduras/objetos), Class, Species, Background,
+  Feat, Condition, Pet/Companion (futuro)
+  ── Tablas puente cuando importe la integridad:
+  CharacterSpell  (characterId, spellKey, prepared)
+  CharacterItem   (characterId, itemKey, equipped, ...estado propio del ítem)
+
+SCOPE DOCUMENTAL (fluido, anidado, versionable como bloque):
+  CharacterSheet   — el resto del payload de 1.2: notas, personalidad,
+                     backstory, loadouts, texto narrativo, overrides — lo que
+                     cambia de forma con el juego y no se consulta por SQL.
 ```
+
+Regla de reparto: **si se filtra, se comparte entre usuarios o referencia un
+catálogo → relacional; si es narrativo o de forma cambiante → documental.**
+Los catálogos son la garantía de que la BBDD no acumula strings ambiguos: el
+personaje referencia `spellKey: "fireball"`, nunca el texto "bola de fuego +8".
 
 ### 2.3 API REST propuesta
 

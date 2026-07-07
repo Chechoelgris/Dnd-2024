@@ -14,7 +14,7 @@ const state = {
   skillExpertise: {},
   attacks: [{ name: "", range: "", bonus: "", damage: "", notes: "" }],
   spellSlots: {},
-  spells: {},
+  spellsKnown: [],  // [{ key: SPELL_CATALOG key, prepared: bool }]
   inventory: [],   // { id, name, category, equipped, armor?, shieldBonus?, weapon?, acBonus? }
   loadouts: [],    // { id, name, itemIds: [] }
   activeLoadoutId: null,
@@ -347,9 +347,43 @@ function computeAC() {
 }
 
 // ---------- Ataques ----------
+// Las armas EQUIPADAS generan sus filas de ataque automáticamente (bonif. y
+// daño derivados del arma + característica + competencia). Las filas manuales
+// quedan para casos que el catálogo no modela (aliento de dracónido, etc.).
+function computedWeaponAttacks() {
+  const pb = proficiencyBonusForLevel(getLevel());
+  return state.inventory
+    .filter(i => i.category === "weapon" && i.equipped && i.weapon)
+    .map(item => {
+      const w = item.weapon;
+      const usedMod = w.finesse ? Math.max(abilityMod("str"), abilityMod("dex")) : abilityMod(w.abilityKey);
+      const ranged = /distancia/i.test(w.properties || "");
+      return {
+        name: item.name,
+        range: ranged ? "A distancia" : "1.5 m",
+        bonus: fmtMod(usedMod + pb),
+        damage: `${w.damage}${usedMod ? fmtMod(usedMod) : ""} ${w.damageType}`,
+        notes: w.properties || "",
+      };
+    });
+}
+
 function renderAttacks() {
   const tbody = byId("attacksTable").querySelector("tbody");
   tbody.innerHTML = "";
+  computedWeaponAttacks().forEach(atk => {
+    const tr = document.createElement("tr");
+    tr.className = "auto-attack";
+    tr.innerHTML = `
+      <td>${atk.name} <span class="auto-tag" title="Calculado desde el arma equipada">auto</span></td>
+      <td>${atk.range}</td>
+      <td>${atk.bonus}</td>
+      <td>${atk.damage}</td>
+      <td>${atk.notes}</td>
+      <td class="no-print"></td>
+    `;
+    tbody.appendChild(tr);
+  });
   state.attacks.forEach((atk, i) => {
     const tr = document.createElement("tr");
     tr.innerHTML = `
@@ -403,25 +437,77 @@ function renderSpellSlots() {
   });
 }
 
-function renderSpellLevels() {
-  const box = byId("spellLevelsBox");
+// Conjuros conocidos: siempre elegidos del catálogo, nunca texto libre.
+function renderSpellPicker() {
+  const picker = byId("spellPicker");
+  const onlyMyClass = byId("spellFilterClass").checked;
+  const classKey = byId("charClass").value;
+  picker.innerHTML = "";
+  const known = new Set(state.spellsKnown.map(s => s.key));
+  for (let lvl = 0; lvl <= 9; lvl++) {
+    const spells = SPELL_CATALOG.filter(sp =>
+      sp.level === lvl && !known.has(sp.key) && (!onlyMyClass || sp.classes.includes(classKey)));
+    if (!spells.length) continue;
+    const group = document.createElement("optgroup");
+    group.label = lvl === 0 ? "Trucos" : `Nivel ${lvl}`;
+    spells.forEach(sp => group.appendChild(new Option(`${sp.name} (${sp.school})`, sp.key)));
+    picker.appendChild(group);
+  }
+  if (!picker.options.length) picker.appendChild(new Option("— sin conjuros disponibles —", ""));
+}
+
+function renderSpellsKnown() {
+  const box = byId("spellsKnownBox");
   box.innerHTML = "";
-  const names = ["Trucos (Nivel 0)", "Nivel 1", "Nivel 2", "Nivel 3", "Nivel 4", "Nivel 5", "Nivel 6", "Nivel 7", "Nivel 8", "Nivel 9"];
-  names.forEach((name, lvl) => {
-    const div = document.createElement("div");
-    div.className = "spell-level";
-    div.innerHTML = `
-      <h4>${name}</h4>
-      <textarea rows="3" data-lvl="${lvl}" placeholder="Conjuros conocidos/preparados de este nivel...">${state.spells[lvl] || ""}</textarea>
-    `;
-    box.appendChild(div);
+  const byLevel = {};
+  state.spellsKnown.forEach(entry => {
+    const def = SPELL_CATALOG.find(sp => sp.key === entry.key);
+    if (!def) return;
+    (byLevel[def.level] = byLevel[def.level] || []).push({ entry, def });
   });
-  box.querySelectorAll("textarea").forEach(ta => {
-    ta.addEventListener("input", e => {
-      state.spells[e.target.dataset.lvl] = e.target.value;
+  Object.keys(byLevel).sort((a, b) => a - b).forEach(lvl => {
+    const group = document.createElement("div");
+    group.className = "spell-level";
+    group.innerHTML = `<h4>${lvl === "0" ? "Trucos" : `Nivel ${lvl}`}</h4>`;
+    byLevel[lvl].forEach(({ entry, def }) => {
+      const row = document.createElement("div");
+      row.className = "spell-row";
+      row.innerHTML = `
+        <label class="prep-check no-print" title="Preparado"><input type="checkbox" data-key="${def.key}" ${entry.prepared ? "checked" : ""}></label>
+        <span class="spell-name">${def.name}${def.concentration ? ' <span class="conc-badge" title="Concentración">C</span>' : ""}</span>
+        <span class="spell-meta">${def.school} · ${def.castingTime} · ${def.range}</span>
+        <span class="spell-summary">${def.summary}</span>
+        <button type="button" class="small-btn no-print" data-del="${def.key}" title="Quitar">✕</button>
+      `;
+      group.appendChild(row);
+    });
+    box.appendChild(group);
+  });
+  if (!state.spellsKnown.length) box.innerHTML = "<p class='hint'>Sin conjuros aprendidos. Añádelos desde el catálogo de arriba.</p>";
+
+  box.querySelectorAll("input[type=checkbox]").forEach(cb => {
+    cb.addEventListener("change", e => {
+      const entry = state.spellsKnown.find(s => s.key === e.target.dataset.key);
+      if (entry) entry.prepared = e.target.checked;
+    });
+  });
+  box.querySelectorAll("button[data-del]").forEach(btn => {
+    btn.addEventListener("click", e => {
+      state.spellsKnown = state.spellsKnown.filter(s => s.key !== e.target.dataset.del);
+      renderSpellsKnown();
+      renderSpellPicker();
     });
   });
 }
+
+byId("btnAddSpell").addEventListener("click", () => {
+  const key = byId("spellPicker").value;
+  if (!key) return;
+  state.spellsKnown.push({ key, prepared: true });
+  renderSpellsKnown();
+  renderSpellPicker();
+});
+byId("spellFilterClass").addEventListener("change", renderSpellPicker);
 
 // ---------- Dados de golpe ----------
 function updateHitDiceDisplay() {
@@ -528,6 +614,7 @@ function recalcAll() {
   byId("qgHP").textContent = `${byId("hpCurrent").value || 0}/${byId("hpMax").value || 0}`;
   byId("qgProf").textContent = fmtMod(pb);
 
+  renderAttacks(); // las filas "auto" dependen de armas equipadas, mods y nivel
   updatePrintHeader();
 }
 
@@ -565,6 +652,7 @@ function onClassChange() {
   state.classSkillChoices = [];
   renderClassSkillChoices();
   renderSkills();
+  renderSpellPicker(); // el filtro "solo mi clase" depende de la clase actual
   renderReferenceInfo();
   recalcAll();
 }
@@ -594,6 +682,68 @@ function onBackgroundChange() {
   renderReferenceInfo();
   recalcAll();
 }
+
+// ---------- Subida de nivel ----------
+// Aplica la tabla de espacios de conjuro que corresponde a la clase y nivel.
+function applySlotProgression() {
+  const cls = getClass();
+  if (!cls) return;
+  const type = CASTER_TYPE[cls.key];
+  if (!type) return;
+  const level = getLevel();
+  if (type === "pact") {
+    const pact = PACT_MAGIC_SLOTS[level];
+    for (let l = 1; l <= 9; l++) {
+      if (!state.spellSlots[l]) state.spellSlots[l] = { total: 0, used: 0 };
+      state.spellSlots[l].total = l === pact.level ? pact.count : 0;
+      state.spellSlots[l].used = Math.min(state.spellSlots[l].used, state.spellSlots[l].total);
+    }
+  } else {
+    const table = type === "full" ? FULL_CASTER_SLOTS : HALF_CASTER_SLOTS;
+    const row = table[level] || [];
+    for (let l = 1; l <= 9; l++) {
+      if (!state.spellSlots[l]) state.spellSlots[l] = { total: 0, used: 0 };
+      state.spellSlots[l].total = row[l - 1] || 0;
+      state.spellSlots[l].used = Math.min(state.spellSlots[l].used, state.spellSlots[l].total);
+    }
+  }
+  renderSpellSlots();
+}
+
+function levelUp() {
+  const cls = getClass();
+  if (!cls) { alert("Elige una clase antes de subir de nivel."); return; }
+  const current = getLevel();
+  if (current >= 20) { alert("Ya estás en el nivel máximo (20)."); return; }
+  const next = current + 1;
+  if (!confirm(`¿Subir de nivel ${current} → ${next} como ${cls.name}?`)) return;
+
+  // PG: promedio del dado (regla estándar) o la tirada que el jugador haga en mesa.
+  const average = Math.floor(cls.hitDie / 2) + 1;
+  const conMod = abilityMod("con");
+  const answer = prompt(
+    `Puntos de Golpe al subir:\n· Promedio del d${cls.hitDie}: ${average}\n· O escribe el resultado de tu tirada de 1d${cls.hitDie}\n(al valor se le suma tu mod. de Constitución ${fmtMod(conMod)})`,
+    String(average)
+  );
+  if (answer === null) return;
+  const rolled = Math.max(1, Math.min(cls.hitDie, Number(answer) || average));
+  const gained = Math.max(1, rolled + conMod);
+
+  byId("charLevel").value = next;
+  byId("hpMax").value = (Number(byId("hpMax").value) || 0) + gained;
+  byId("hpCurrent").value = (Number(byId("hpCurrent").value) || 0) + gained;
+
+  applySlotProgression();
+  recalcAll();
+
+  const notes = [`Nivel ${next}: +${gained} PG (tirada/promedio ${rolled} ${fmtMod(conMod)} Con).`];
+  if (next === SUBCLASS_LEVEL) notes.push("¡Eliges SUBCLASE en este nivel! Anótala en Rasgos.");
+  if (ASI_LEVELS.includes(next)) notes.push("Mejora de Característica o Dote: +2/+1+1 a características (máx. 20) o una dote. Ajusta tus puntuaciones base.");
+  if (CASTER_TYPE[cls.key]) notes.push("Espacios de conjuro actualizados automáticamente a la tabla de tu clase.");
+  if (proficiencyBonusForLevel(next) > proficiencyBonusForLevel(current)) notes.push(`Tu bonificador de competencia sube a ${fmtMod(proficiencyBonusForLevel(next))}.`);
+  alert(notes.join("\n"));
+}
+byId("btnLevelUp").addEventListener("click", levelUp);
 
 // ---------- Descansos ----------
 byId("btnLongRest").addEventListener("click", () => {
@@ -685,7 +835,7 @@ function loadSampleCharacter(key, skipConfirm) {
   state.attacks = sample.attacks.map(a => ({ ...a }));
   state.spellSlots = {};
   if (sample.spellSlots) Object.entries(sample.spellSlots).forEach(([lvl, v]) => { state.spellSlots[lvl] = { ...v }; });
-  state.spells = {};
+  state.spellsKnown = (sample.spellsKnown || []).map(s => ({ ...s }));
 
   byId("featuresTraits").value = sample.featuresTraits || "";
   byId("originFeat").value = sample.originFeat || "";
@@ -693,6 +843,7 @@ function loadSampleCharacter(key, skipConfirm) {
   byId("otherProficiencies").value = sample.otherProficiencies || "";
   byId("equipment").value = "";
   byId("treasure").value = "";
+  byId("spellNotes").value = "";
 
   renderAbilities();
   renderBackgroundAllocation();
@@ -702,11 +853,13 @@ function loadSampleCharacter(key, skipConfirm) {
   renderClassSkillChoices();
   renderAttacks();
   renderSpellSlots();
-  renderSpellLevels();
+  renderSpellsKnown();
+  renderSpellPicker();
   renderInventory();
   renderLoadoutBars();
   renderReferenceInfo();
   recalcAll();
+  dismissOnboarding();
 }
 byId("btnLoadRogue").addEventListener("click", () => loadSampleCharacter("rogue"));
 byId("btnLoadPaladin").addEventListener("click", () => loadSampleCharacter("paladin"));
@@ -727,7 +880,7 @@ const TEXT_FIELD_IDS = [
   "acManualBonus", "speed", "hpMax", "hpCurrent", "hpTemp", "equipment", "treasure",
   "personalityTraits", "ideals", "bonds", "flaws", "originFeat", "originFeatDesc", "featuresTraits", "otherProficiencies",
   "age", "height", "weight", "eyes", "skin", "hair", "alliesOrgs", "backstory", "spellClass",
-  "defenses", "conditions", "senses", "notes",
+  "defenses", "conditions", "senses", "notes", "spellNotes",
 ];
 const CHECKBOX_IDS = ["inspiration", "concentration", "ds_s1", "ds_s2", "ds_s3", "ds_f1", "ds_f2", "ds_f3"];
 
@@ -757,7 +910,7 @@ function getFullState() {
     skillExpertise: state.skillExpertise,
     attacks: state.attacks,
     spellSlots: state.spellSlots,
-    spells: state.spells,
+    spellsKnown: state.spellsKnown,
     inventory: state.inventory,
     loadouts: state.loadouts,
     activeLoadoutId: state.activeLoadoutId,
@@ -775,7 +928,15 @@ function loadFullState(data) {
   state.skillExpertise = data.skillExpertise || {};
   state.attacks = data.attacks && data.attacks.length ? data.attacks : [{ name: "", range: "", bonus: "", damage: "", notes: "" }];
   state.spellSlots = data.spellSlots || {};
-  state.spells = data.spells || {};
+  state.spellsKnown = data.spellsKnown || [];
+  // Migración: los guardados antiguos tenían conjuros como texto libre por nivel.
+  if (data.spells && !data.spellsKnown) {
+    const legacy = Object.entries(data.spells)
+      .filter(([, text]) => text && text.trim())
+      .map(([lvl, text]) => `${lvl === "0" ? "Trucos" : `Nivel ${lvl}`}: ${text.trim()}`)
+      .join("\n");
+    if (legacy && data.form) data.form.spellNotes = [data.form.spellNotes, legacy].filter(Boolean).join("\n");
+  }
   state.inventory = data.inventory || [];
   state.loadouts = data.loadouts || [];
   state.activeLoadoutId = data.activeLoadoutId || null;
@@ -790,7 +951,8 @@ function loadFullState(data) {
   renderClassSkillChoices();
   renderAttacks();
   renderSpellSlots();
-  renderSpellLevels();
+  renderSpellsKnown();
+  renderSpellPicker();
   renderInventory();
   renderLoadoutBars();
   renderReferenceInfo();
@@ -832,6 +994,11 @@ byId("btnReset").addEventListener("click", () => {
 });
 byId("btnPrint").addEventListener("click", () => window.print());
 
+// El menú se cierra al elegir cualquier acción.
+document.querySelectorAll("#mainMenu .menu-panel button, #mainMenu .menu-panel label").forEach(el => {
+  el.addEventListener("click", () => { byId("mainMenu").removeAttribute("open"); });
+});
+
 // ---------- Listeners generales ----------
 byId("charClass").addEventListener("change", onClassChange);
 byId("charSpecies").addEventListener("change", onSpeciesChange);
@@ -854,7 +1021,8 @@ function init() {
   renderClassSkillChoices();
   renderAttacks();
   renderSpellSlots();
-  renderSpellLevels();
+  renderSpellsKnown();
+  renderSpellPicker();
   renderInventory();
   renderLoadoutBars();
   renderReferenceInfo();
