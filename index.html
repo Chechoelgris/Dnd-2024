@@ -4,6 +4,9 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Hoja de Personaje — D&amp;D 2024</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700&family=EB+Garamond:ital,wght@0,400;0,600;1,400&family=UnifrakturMaguntia&display=swap">
 <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
@@ -76,6 +79,16 @@
 
     <!-- PANTALLAS: cada una enfocada en un propósito, comparten el mismo estado -->
     <div class="main-panel">
+
+      <div class="card onboarding no-print" id="onboarding" hidden>
+        <h2 class="onboarding-title">Bienvenido, aventurero</h2>
+        <p class="onboarding-lede">Esta hoja calcula todo por ti: elige clase, especie y trasfondo arriba y mira cómo salvaciones, CA y conjuros se actualizan solos. ¿Por dónde quieres empezar?</p>
+        <div class="onboarding-actions">
+          <button type="button" id="onbRogue" class="onb-btn">🗡️ Ver un Pícaro de ejemplo<span>Vex Sombralarga, nivel 5 — con dos equipamientos listos para alternar</span></button>
+          <button type="button" id="onbPaladin" class="onb-btn">🛡️ Ver un Paladín de ejemplo<span>Bruma Kaelthorn, nivel 5 — armadura pesada, escudo y conjuros</span></button>
+          <button type="button" id="onbBlank" class="onb-btn quiet">📜 Empezar con hoja en blanco<span>Crea tu personaje desde cero</span></button>
+        </div>
+      </div>
 
       <nav class="screen-switcher no-print">
         <button class="screen-btn active" data-screen="combat">⚔️ Combate</button>

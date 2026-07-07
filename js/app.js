@@ -643,10 +643,10 @@ document.querySelectorAll(".screen-btn").forEach(btn => {
 });
 
 // ---------- Personajes de ejemplo ----------
-function loadSampleCharacter(key) {
+function loadSampleCharacter(key, skipConfirm) {
   const sample = SAMPLE_CHARACTERS[key];
   if (!sample) return;
-  if (!confirm(`¿Cargar el personaje de ejemplo "${sample.identity.name}"? Se perderán los cambios no guardados.`)) return;
+  if (!skipConfirm && !confirm(`¿Cargar el personaje de ejemplo "${sample.identity.name}"? Se perderán los cambios no guardados.`)) return;
 
   byId("charName").value = sample.identity.name;
   byId("playerName").value = sample.identity.playerName || "";
@@ -710,6 +710,16 @@ function loadSampleCharacter(key) {
 }
 byId("btnLoadRogue").addEventListener("click", () => loadSampleCharacter("rogue"));
 byId("btnLoadPaladin").addEventListener("click", () => loadSampleCharacter("paladin"));
+
+// ---------- Onboarding (primera visita sin personaje guardado) ----------
+const ONBOARDING_KEY = "dnd2024-onboarding-done";
+function dismissOnboarding() {
+  localStorage.setItem(ONBOARDING_KEY, "1");
+  byId("onboarding").hidden = true;
+}
+byId("onbRogue").addEventListener("click", () => { dismissOnboarding(); loadSampleCharacter("rogue", true); });
+byId("onbPaladin").addEventListener("click", () => { dismissOnboarding(); loadSampleCharacter("paladin", true); });
+byId("onbBlank").addEventListener("click", dismissOnboarding);
 
 // ---------- Guardar / Cargar ----------
 const TEXT_FIELD_IDS = [
@@ -854,6 +864,7 @@ function init() {
     try { loadFullState(JSON.parse(raw)); } catch (e) { recalcAll(); }
   } else {
     recalcAll();
+    if (!localStorage.getItem(ONBOARDING_KEY)) byId("onboarding").hidden = false;
   }
 }
 init();
