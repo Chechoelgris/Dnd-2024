@@ -1,6 +1,11 @@
 # Especificación de Estado e Integración Frontend↔Backend
 ### Hoja de Personaje D&D 2024 — documento de referencia reutilizable
 
+> **Stack decidido (jul 2026):** Railway (API Express) + Supabase (Postgres +
+> Auth) + GitHub/Cloudflare Pages (frontend). Una implementación de referencia
+> de la Parte 2 vive ya en [`../backend/`](../backend/) — ver su README para el
+> runbook de despliegue. Multi-usuario con campañas/DM, local-first.
+
 > **Cómo usar este documento.** Está escrito para pegarse completo como prompt inicial
 > de una futura sesión (de diseño de frontend o de construcción de backend). Es
 > autocontenido: no asume que quien lo lea tiene el historial de esta conversación.
